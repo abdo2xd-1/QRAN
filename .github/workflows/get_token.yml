@@ -1,0 +1,67 @@
+name: Get YouTube Token
+
+on:
+  workflow_dispatch:
+
+jobs:
+  auth:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Requests
+        run: pip install requests
+
+      - name: Authorize Device
+        env:
+          CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+        run: |
+          python -c '
+          import os, time, requests
+
+          client_id = os.environ["CLIENT_ID"]
+          client_secret = os.environ["CLIENT_SECRET"]
+
+          # طلب كود الجهاز
+          res = requests.post("https://oauth2.googleapis.com/device/code", data={
+              "client_id": client_id,
+              "scope": "https://www.googleapis.com/auth/youtube.upload"
+          }).json()
+
+          if "error" in res:
+              print("Error:", res)
+              exit(1)
+
+          device_code = res["device_code"]
+          user_code = res["user_code"]
+          verification_url = res["verification_url"]
+          interval = res.get("interval", 5)
+
+          print("\n" + "="*50)
+          print(f"1. افتح هذا الرابط: {verification_url}")
+          print(f"2. ادخل هذا الكود: {user_code}")
+          print("="*50 + "\n")
+
+          while True:
+              time.sleep(interval)
+              token_res = requests.post("https://oauth2.googleapis.com/token", data={
+                  "client_id": client_id,
+                  "client_secret": client_secret,
+                  "device_code": device_code,
+                  "grant_type": "urn:ietf:params:oauth:grant-type:device_code"
+              }).json()
+
+              if "refresh_token" in token_res:
+                  print("\nتم استخراج التوكن بنجاح!")
+                  print("="*50)
+                  print(token_res["refresh_token"])
+                  print("="*50)
+                  break
+              elif token_res.get("error") not in ["authorization_pending", "slow_down"]:
+                  print("خطأ:", token_res)
+                  break
+          '
