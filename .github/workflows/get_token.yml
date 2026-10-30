@@ -26,13 +26,10 @@ jobs:
           client_id = os.environ["CLIENT_ID"].strip()
           client_secret = os.environ["CLIENT_SECRET"].strip()
 
-          # 1. طلب كود المصادقة للجهاز
-          init_data = {
+          res = requests.post("https://oauth2.googleapis.com/device/code", data={
               "client_id": client_id,
               "scope": "https://www.googleapis.com/auth/youtube.upload"
-          }
-          
-          res = requests.post("https://oauth2.googleapis.com/device/code", data=init_data).json()
+          }).json()
 
           if "error" in res:
               print("Init Error:", res)
@@ -44,42 +41,36 @@ jobs:
           interval = res.get("interval", 5)
 
           print("\n" + "="*50)
-          print(f"1. افتح هذا الرابط: {verification_url}")
+          print(f"1. افتح الرابط فوراً: {verification_url}")
           print(f"2. ادخل هذا الكود: {user_code}")
           print("="*50 + "\n")
-          print("بانتظار موافقتك عبر المتصفح...")
+          print("بانتظار تسجيل دخولك وموافقتك...")
 
-          # 2. حلقة استلام التوكن
-          token_payload = {
-              "client_id": client_id,
-              "device_code": device_code,
-              "grant_type": "urn:ietf:params:oauth:grant-type:device_code"
-          }
-          if client_secret:
-              token_payload["client_secret"] = client_secret
-
-          while True:
+          # حلقة انتظار حقيقية حتى تنتهي من المتصفح
+          for _ in range(60): # ينتظر حتى 5 دقائق
               time.sleep(interval)
-              token_res = requests.post("https://oauth2.googleapis.com/token", data=token_payload).json()
+              token_res = requests.post("https://oauth2.googleapis.com/token", data={
+                  "client_id": client_id,
+                  "client_secret": client_secret,
+                  "device_code": device_code,
+                  "grant_type": "urn:ietf:params:oauth:grant-type:device_code"
+              }).json()
 
               if "refresh_token" in token_res:
-                  print("\nتم استخراج التوكن بنجاح!")
-                  print("="*50)
+                  print("\n" + "="*50)
+                  print("تم استخراج التوكن بنجاح:")
                   print(token_res["refresh_token"])
-                  print("="*50)
+                  print("="*50 + "\n")
                   break
               
               err = token_res.get("error")
               if err == "authorization_pending":
+                  print("لا زال بانتظار الموافقة في المتصفح...")
                   continue
               elif err == "slow_down":
                   time.sleep(interval)
                   continue
               else:
-                  # محاولة ثانية بدون إرسال client_secret إذا رفض السيرفر
-                  if "client_secret" in token_payload:
-                      del token_payload["client_secret"]
-                      continue
-                  print("Token Error:", token_res)
+                  print("Error:", token_res)
                   break
           '
