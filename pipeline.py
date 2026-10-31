@@ -127,12 +127,14 @@ SURAHS = {
 
 def get_access_token(client_id, client_secret, refresh_token):
     print("جاري تجديد Access Token الخاص بـ YouTube API...")
-    res = requests.post("https://oauth2.googleapis.com/token", data={
+    payload = {
         "client_id": client_id,
         "client_secret": client_secret,
         "refresh_token": refresh_token,
         "grant_type": "refresh_token"
-    }).json()
+    }
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+    res = requests.post("https://oauth2.googleapis.com/token", data=payload, headers=headers).json()
     if "access_token" not in res:
         print("خطأ في تجديد التوكن:", res)
         sys.exit(1)
@@ -140,7 +142,6 @@ def get_access_token(client_id, client_secret, refresh_token):
 
 def download_audio(surah_num):
     filename = SURAHS[surah_num]["file"]
-    # سيرفر التسجيلات الإذاعية المرتلة للمنشاوي (Public Domain خالي من حقوق النشر)
     url = f"https://server10.mp3quran.net/minsh/{filename}"
     print(f"جاري تنزيل الملف الصوتي: {url}")
     r = requests.get(url, stream=True)
@@ -159,16 +160,13 @@ def create_thumbnail(surah_name):
     
     font = ImageFont.truetype("assets/font.ttf", 95)
     
-    # تحديد مركز كتابة اسم السورة داخل الإطار المخصص
     bbox = draw.textbbox((0, 0), bidi_text, font=font)
     w = bbox[2] - bbox[0]
     h = bbox[3] - bbox[1]
     
-    # الإحداثيات الموزونة لمنتصف الإطار الأخضر/الذهبي
     x = 730 - (w / 2)
     y = 230 - (h / 2)
     
-    # رسم ظل عميق للنص + اللون الذهبي المضيء
     draw.text((x + 4, y + 4), bidi_text, font=font, fill=(20, 15, 10))
     draw.text((x, y), bidi_text, font=font, fill=(245, 215, 135))
     
@@ -177,7 +175,6 @@ def create_thumbnail(surah_name):
 
 def build_video():
     print("جاري دمج الفيديو وإضافة طبقة الحبيبات السينمائية (Film Grain Noise) عبر FFmpeg...")
-    # توليد حبيبات متحركة متناسقة ومعالجة قياسية لمستوى الصوت (Loudnorm)
     cmd = [
         "ffmpeg", "-y",
         "-loop", "1", "-i", "assets/background.jpg",
@@ -203,7 +200,7 @@ def upload_to_youtube(access_token, surah_name):
 الرواية: حفص عن عاصم
 
 صدقة جارية لنا ولكم ولوالدينا ولموتانا وموتى المسلمين جميعاً.
-#المنشاوي #{surah_name.replace(' ', '_')} #تلاوات_خاشعة #قرآن_كريم #سورة_الكهف"""
+#المنشاوي #{surah_name.replace(' ', '_')} #تلاوات_خاشعة #قرآن_كريم"""
 
     headers = {
         "Authorization": f"Bearer {access_token}",
@@ -261,7 +258,7 @@ def upload_to_youtube(access_token, surah_name):
     print("تم تعيين الصورة المصغرة بنجاح:", t_res.status_code)
 
 if __name__ == "__main__":
-    surah_num = int(os.environ.get("SURAH_NUMBER", 18))
+    surah_num = int(os.environ.get("SURAH_NUMBER", "18").strip())
     surah_data = SURAHS.get(surah_num, SURAHS[18])
     
     c_id = os.environ["CLIENT_ID"].strip()
