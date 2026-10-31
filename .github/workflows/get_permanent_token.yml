@@ -26,23 +26,23 @@ jobs:
           c_id = os.environ.get("CLIENT_ID", "").strip()
           c_sec = os.environ.get("CLIENT_SECRET", "").strip()
 
-          if not c_id or not c_sec:
-              print("خطأ: تأكد من إضافة YOUTUBE_CLIENT_ID و YOUTUBE_CLIENT_SECRET داخل Secrets المستودع.")
-              sys.exit(1)
+          print(f"طول Client ID: {len(c_id)}")
+          print(f"طول Client Secret: {len(c_sec)}")
 
-          req = requests.post("https://oauth2.googleapis.com/device/code", data={
+          # 1. طلب كود الجهاز
+          device_res = requests.post("https://oauth2.googleapis.com/device/code", data={
               "client_id": c_id,
               "scope": "https://www.googleapis.com/auth/youtube.upload"
           }).json()
 
-          if "device_code" not in req:
-              print("خطأ في الاتصال بجوجل:", req)
+          if "device_code" not in device_res:
+              print("خطأ في الاتصال بجوجل:", device_res)
               sys.exit(1)
 
-          d_code = req["device_code"]
-          u_code = req["user_code"]
-          url = req.get("verification_url", "https://www.google.com/device")
-          interval = req.get("interval", 5)
+          d_code = device_res["device_code"]
+          u_code = device_res["user_code"]
+          url = device_res.get("verification_url", "https://www.google.com/device")
+          interval = device_res.get("interval", 5)
 
           print("\n" + "="*60)
           print(f"1. افتح هذا الرابط: {url}")
@@ -50,25 +50,31 @@ jobs:
           print("="*60 + "\n")
           sys.stdout.flush()
 
+          # 2. حلقة الانتظار لحين إدخال الكود والموافقة
           while True:
               time.sleep(interval)
-              res = requests.post("https://oauth2.googleapis.com/token", data={
+              token_data = {
                   "client_id": c_id,
                   "client_secret": c_sec,
-                  "device_code": d_code,
-                  "grant_type": "urn:ietf:params:oauth:grant-type:device_code"
-              }).json()
+                  "code": d_code,
+                  "grant_type": "http://oauth.net/grant_type/device/1.0"
+              }
+              res = requests.post("https://oauth2.googleapis.com/token", data=token_data).json()
 
               if "refresh_token" in res:
                   print("\n" + "#"*60)
-                  print("تم استخراج التوكن الدائم مدى الحياة بنجاح:")
+                  print("تم استخراج التوكن الدائم بنجاح:")
                   print(res["refresh_token"])
                   print("#"*60 + "\n")
                   break
-              elif res.get("error") == "authorization_pending":
+              
+              err = res.get("error")
+              if err == "authorization_pending":
                   print("... بانتظار إدخال الكود والموافقة في المتصفح")
                   sys.stdout.flush()
+              elif err == "slow_down":
+                  time.sleep(interval + 2)
               else:
-                  print("خطأ:", res)
-                  break
+                  print("خطأ من جوجل:", res)
+                  sys.exit(1)
           EOF
