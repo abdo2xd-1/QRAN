@@ -18,17 +18,19 @@ jobs:
       - name: Authenticate with Google
         env:
           CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
         run: |
           python - << 'EOF'
           import os, time, sys, requests
 
           c_id = os.environ.get("CLIENT_ID", "").strip()
+          c_sec = os.environ.get("CLIENT_SECRET", "").strip()
 
-          if not c_id:
-              print("خطأ: YOUTUBE_CLIENT_ID غير موجود في Secrets!")
+          if not c_id or not c_sec:
+              print("خطأ: تأكد من وجود CLIENT_ID و CLIENT_SECRET في Secrets!")
               sys.exit(1)
 
-          # طلب كود المصادقة لجهاز محدود الإدخال
+          # 1. طلب الكود لجهاز التلفاز
           req = requests.post("https://oauth2.googleapis.com/device/code", data={
               "client_id": c_id,
               "scope": "https://www.googleapis.com/auth/youtube.upload"
@@ -49,11 +51,12 @@ jobs:
           print("="*60 + "\n")
           sys.stdout.flush()
 
-          # انتظار موافقتك في المتصفح دون إرسال client_secret المسبب للمشكلة
+          # 2. الانتظار حتى تقوم بإدخال الكود في المتصفح
           while True:
               time.sleep(interval)
               res = requests.post("https://oauth2.googleapis.com/token", data={
                   "client_id": c_id,
+                  "client_secret": c_sec,
                   "device_code": d_code,
                   "grant_type": "urn:ietf:params:oauth:grant-type:device_code"
               }).json()
@@ -72,6 +75,6 @@ jobs:
               elif err == "slow_down":
                   time.sleep(interval + 5)
               else:
-                  print("رد جوجل:", res)
-                  break
+                  print("... جاري الانتظار لحين إدخال الكود في المتصفح")
+                  sys.stdout.flush()
           EOF
