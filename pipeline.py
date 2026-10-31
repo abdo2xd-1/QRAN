@@ -126,7 +126,15 @@ SURAHS = {
 }
 
 def get_access_token(client_id, client_secret, refresh_token):
-    print("جاري تجديد Access Token الخاص بـ YouTube API...")
+    print("جاري التحقق من بيانات المصادقة وتجديد Access Token...")
+    print(f"-> طول Client ID: {len(client_id)}")
+    print(f"-> طول Client Secret: {len(client_secret)}")
+    print(f"-> طول Refresh Token: {len(refresh_token)}")
+
+    if not refresh_token:
+        print("خطأ: الـ Refresh Token فارغ! تأكد من وجود Secret باسم YOUTUBE_REFRESH_TOKEN.")
+        sys.exit(1)
+
     payload = {
         "client_id": client_id,
         "client_secret": client_secret,
@@ -135,9 +143,12 @@ def get_access_token(client_id, client_secret, refresh_token):
     }
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
     res = requests.post("https://oauth2.googleapis.com/token", data=payload, headers=headers).json()
+    
     if "access_token" not in res:
         print("خطأ في تجديد التوكن:", res)
         sys.exit(1)
+        
+    print("تم تجديد الـ Access Token بنجاح.")
     return res["access_token"]
 
 def download_audio(surah_num):
@@ -261,9 +272,9 @@ if __name__ == "__main__":
     surah_num = int(os.environ.get("SURAH_NUMBER", "18").strip())
     surah_data = SURAHS.get(surah_num, SURAHS[18])
     
-    c_id = os.environ["CLIENT_ID"].strip()
-    c_secret = os.environ["CLIENT_SECRET"].strip()
-    r_token = os.environ["REFRESH_TOKEN"].strip()
+    c_id = os.environ.get("CLIENT_ID", "").strip()
+    c_secret = os.environ.get("CLIENT_SECRET", "").strip()
+    r_token = os.environ.get("REFRESH_TOKEN", "").strip()
     
     token = get_access_token(c_id, c_secret, r_token)
     download_audio(surah_num)
