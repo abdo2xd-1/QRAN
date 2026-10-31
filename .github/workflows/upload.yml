@@ -1,0 +1,38 @@
+name: Quran Video Auto Publisher
+
+on:
+  workflow_dispatch:
+    inputs:
+      surah_number:
+        description: 'اكتب رقم السورة (1 إلى 114) — مثال: 18 للكهف، 20 لطه، 36 ليس'
+        required: true
+        default: '18'
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python Dependencies
+        run: |
+          pip install requests Pillow arabic-reshaper python-bidi
+
+      - name: Run Quran Publisher
+        env:
+          SURAH_NUMBER: ${{ github.event.inputs.surah_number }}
+          CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        run: python pipeline.py
