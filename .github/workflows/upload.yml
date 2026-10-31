@@ -27,7 +27,7 @@ jobs:
 
       - name: Install Python Dependencies
         run: |
-          pip install requests Pillow arabic-reshaper python-bidi
+          pip install requests Pillow arabic-reshaper python-bidi google-auth google-auth-oauthlib
 
       - name: Run Quran Publisher
         env:
