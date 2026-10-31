@@ -6,6 +6,8 @@ import subprocess
 from PIL import Image, ImageDraw, ImageFont
 import arabic_reshaper
 from bidi.algorithm import get_display
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
 
 # القاموس الشامل لجميع سور القرآن الـ 114
 SURAHS = {
@@ -126,30 +128,28 @@ SURAHS = {
 }
 
 def get_access_token(client_id, client_secret, refresh_token):
-    print("جاري التحقق من بيانات المصادقة وتجديد Access Token...")
-    print(f"-> طول Client ID: {len(client_id)}")
-    print(f"-> طول Client Secret: {len(client_secret)}")
-    print(f"-> طول Refresh Token: {len(refresh_token)}")
-
-    if not refresh_token:
-        print("خطأ: الـ Refresh Token فارغ! تأكد من وجود Secret باسم YOUTUBE_REFRESH_TOKEN.")
-        sys.exit(1)
-
-    payload = {
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "refresh_token": refresh_token,
-        "grant_type": "refresh_token"
-    }
-    headers = {"Content-Type": "application/x-www-form-urlencoded"}
-    res = requests.post("https://oauth2.googleapis.com/token", data=payload, headers=headers).json()
-    
-    if "access_token" not in res:
-        print("خطأ في تجديد التوكن:", res)
-        sys.exit(1)
+    print("جاري تجديد Access Token عبر مكتبة Google الرسمية...")
+    try:
+        creds = Credentials(
+            token=None,
+            refresh_token=refresh_token,
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=client_id,
+            client_secret=client_secret,
+            scopes=["https://www.googleapis.com/auth/youtube.upload"]
+        )
+        req = Request()
+        creds.refresh(req)
         
-    print("تم تجديد الـ Access Token بنجاح.")
-    return res["access_token"]
+        if not creds.token:
+            print("خطأ: لم يتم إصدار access token صالح.")
+            sys.exit(1)
+            
+        print("تم تجديد الـ Access Token بنجاح تام.")
+        return creds.token
+    except Exception as e:
+        print(f"فشل تجديد التوكن عبر المكتبة الرسمية: {e}")
+        sys.exit(1)
 
 def download_audio(surah_num):
     filename = SURAHS[surah_num]["file"]
