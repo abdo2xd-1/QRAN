@@ -26,11 +26,7 @@ jobs:
           c_id = os.environ.get("CLIENT_ID", "").strip()
           c_sec = os.environ.get("CLIENT_SECRET", "").strip()
 
-          if not c_id or not c_sec:
-              print("خطأ: تأكد من وجود CLIENT_ID و CLIENT_SECRET في Secrets!")
-              sys.exit(1)
-
-          # 1. طلب الكود لجهاز التلفاز
+          # طلب كود جهاز جديد
           req = requests.post("https://oauth2.googleapis.com/device/code", data={
               "client_id": c_id,
               "scope": "https://www.googleapis.com/auth/youtube.upload"
@@ -46,19 +42,18 @@ jobs:
           interval = req.get("interval", 5)
 
           print("\n" + "="*60)
-          print(f"1. افتح هذا الرابط فوراً: {url}")
+          print(f"1. افتح هذا الرابط: {url}")
           print(f"2. ادخل هذا الكود: {u_code}")
           print("="*60 + "\n")
           sys.stdout.flush()
 
-          # 2. الانتظار حتى تقوم بإدخال الكود في المتصفح
           while True:
               time.sleep(interval)
               res = requests.post("https://oauth2.googleapis.com/token", data={
                   "client_id": c_id,
                   "client_secret": c_sec,
-                  "device_code": d_code,
-                  "grant_type": "urn:ietf:params:oauth:grant-type:device_code"
+                  "code": d_code,
+                  "grant_type": "http://oauth.net/grant_type/device/1.0"
               }).json()
 
               if "refresh_token" in res:
@@ -70,11 +65,11 @@ jobs:
               
               err = res.get("error")
               if err == "authorization_pending":
-                  print("... بانتظار إدخال الكود والموافقة في صفحة جوجل")
+                  print("... بانتظار إدخال الكود والموافقة في صفحة المتصفح")
                   sys.stdout.flush()
               elif err == "slow_down":
                   time.sleep(interval + 5)
               else:
-                  print("... جاري الانتظار لحين إدخال الكود في المتصفح")
-                  sys.stdout.flush()
+                  print("خطأ غير متوقع من جوجل:", res)
+                  sys.exit(1)
           EOF
