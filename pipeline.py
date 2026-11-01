@@ -1,13 +1,10 @@
 import os
 import sys
-import json
 import requests
 import subprocess
 from PIL import Image, ImageDraw, ImageFont
 import arabic_reshaper
 from bidi.algorithm import get_display
-from google.oauth2.credentials import Credentials
-from google.auth.transport.requests import Request
 
 # القاموس الشامل لجميع سور القرآن الـ 114
 SURAHS = {
@@ -127,30 +124,6 @@ SURAHS = {
     114: {"name": "سورة الناس", "file": "114.mp3"},
 }
 
-def get_access_token(client_id, client_secret, refresh_token):
-    print("جاري تجديد Access Token عبر مكتبة Google الرسمية...")
-    try:
-        creds = Credentials(
-            token=None,
-            refresh_token=refresh_token,
-            token_uri="https://oauth2.googleapis.com/token",
-            client_id=client_id,
-            client_secret=client_secret,
-            scopes=["https://www.googleapis.com/auth/youtube.upload"]
-        )
-        req = Request()
-        creds.refresh(req)
-        
-        if not creds.token:
-            print("خطأ: لم يتم إصدار access token صالح.")
-            sys.exit(1)
-            
-        print("تم تجديد الـ Access Token بنجاح تام.")
-        return creds.token
-    except Exception as e:
-        print(f"فشل تجديد التوكن عبر المكتبة الرسمية: {e}")
-        sys.exit(1)
-
 def download_audio(surah_num):
     filename = SURAHS[surah_num]["file"]
     url = f"https://server10.mp3quran.net/minsh/{filename}"
@@ -202,10 +175,14 @@ def build_video():
     subprocess.run(cmd, check=True)
     print("تم إنشاء ملف الفيديو output.mp4 بنجاح.")
 
-def upload_to_youtube(access_token, surah_name):
+if __name__ == "__main__":
+    surah_num = int(os.environ.get("SURAH_NUMBER", "18").strip())
+    surah_data = SURAHS.get(surah_num, SURAHS[18])
+    surah_name = surah_data["name"]
+
     title = f"{surah_name} كاملة بصوت هادئ يريح القلب | الشيخ محمد صديق المنشاوي (تسجيل نقي)"
-    description = f"""تلاوة خاشعة مباركة لـ {surah_name} بصوت فضيلة الشيخ محمد صديق المنشاوي (رحمه الله).
-تسجيل إذاعي تاريخي نقي وهادئ بدون صدى صوت لمساعدتك على التدبر والسكينة.
+    desc = f"""تلاوة خاشعة مباركة لـ {surah_name} بصوت فضيلة الشيخ محمد صديق المنشاوي (رحمه الله).
+تسجيل إذاعي نقي بدون صدى صوت لمساعدتك على التدبر والسكينة.
 
 القارئ: فضيلة الشيخ محمد صديق المنشاوي
 الرواية: حفص عن عاصم
@@ -213,71 +190,13 @@ def upload_to_youtube(access_token, surah_name):
 صدقة جارية لنا ولكم ولوالدينا ولموتانا وموتى المسلمين جميعاً.
 #المنشاوي #{surah_name.replace(' ', '_')} #تلاوات_خاشعة #قرآن_كريم"""
 
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json; charset=UTF-8"
-    }
-    
-    metadata = {
-        "snippet": {
-            "title": title,
-            "description": description,
-            "tags": ["المنشاوي", surah_name, "قرآن", "تلاوة خاشعة", "بدون صدى صوت", "نوم وهدوء", "سورة"],
-            "categoryId": "22"
-        },
-        "status": {
-            "privacyStatus": "public",
-            "selfDeclaredMadeForKids": False
-        }
-    }
-
-    print("بدء جلسة الرفع التتابعي (Resumable Upload Session)...")
-    init_res = requests.post(
-        "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status",
-        headers=headers,
-        data=json.dumps(metadata)
-    )
-    
-    if init_res.status_code != 200:
-        print("خطأ في بدء جلسة الرفع:", init_res.text)
-        sys.exit(1)
+    with open("title.txt", "w", encoding="utf-8") as f:
+        f.write(title)
         
-    upload_url = init_res.headers.get("Location")
+    with open("desc.txt", "w", encoding="utf-8") as f:
+        f.write(desc)
 
-    print("جاري رفع ملف الفيديو إلى القناة الآن...")
-    with open("output.mp4", "rb") as f:
-        video_res = requests.put(
-            upload_url,
-            headers={"Content-Type": "video/mp4"},
-            data=f
-        ).json()
-    
-    video_id = video_res.get("id")
-    if not video_id:
-        print("خطأ في رفع الفيديو:", video_res)
-        sys.exit(1)
-        
-    print(f"تم رفع الفيديو بنجاح! الرابط: https://youtu.be/{video_id}")
-
-    print("جاري رفع الصورة المصغرة المخصصة...")
-    with open("thumbnail_final.jpg", "rb") as thumb_f:
-        t_res = requests.post(
-            f"https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId={video_id}",
-            headers={"Authorization": f"Bearer {access_token}"},
-            files={"image": ("thumbnail.jpg", thumb_f, "image/jpeg")}
-        )
-    print("تم تعيين الصورة المصغرة بنجاح:", t_res.status_code)
-
-if __name__ == "__main__":
-    surah_num = int(os.environ.get("SURAH_NUMBER", "18").strip())
-    surah_data = SURAHS.get(surah_num, SURAHS[18])
-    
-    c_id = os.environ.get("CLIENT_ID", "").strip()
-    c_secret = os.environ.get("CLIENT_SECRET", "").strip()
-    r_token = os.environ.get("REFRESH_TOKEN", "").strip()
-    
-    token = get_access_token(c_id, c_secret, r_token)
     download_audio(surah_num)
-    create_thumbnail(surah_data["name"])
+    create_thumbnail(surah_name)
     build_video()
-    upload_to_youtube(token, surah_data["name"])
+    print("تم إعداد الفيديو وبيانات النشر بنجاح.")
