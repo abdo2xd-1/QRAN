@@ -22,7 +22,7 @@ jobs:
 
       - name: Install Python Dependencies
         run: |
-          pip install requests Pillow arabic-reshaper python-bidi google-genai
+          pip install requests Pillow arabic-reshaper python-bidi
 
       - name: Install FFmpeg
         run: |
@@ -32,7 +32,7 @@ jobs:
       - name: Generate Quran Video
         env:
           SURAH_NUMBER: ${{ github.event.inputs.surah_number }}
-          GEMINI_API_KEY: ${{ secrets.API_KEY }}
+          API_KEY: ${{ secrets.API_KEY }}
         run: python pipeline.py
 
       - name: Upload Video and Assets to GitHub Artifacts
