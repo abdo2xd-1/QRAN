@@ -124,6 +124,31 @@ SURAHS = {
     114: {"name": "سورة الناس", "file": "114.mp3"},
 }
 
+def ensure_assets():
+    os.makedirs("assets", exist_ok=True)
+    # تنزيل خط عربي رسمي (Amiri)
+    font_path = "assets/font.ttf"
+    if not os.path.exists(font_path):
+        print("جاري تنزيل الخط العربي المعتمد...")
+        font_url = "https://github.com/google/fonts/raw/main/ofl/amiri/Amiri-Bold.ttf"
+        r = requests.get(font_url)
+        with open(font_path, "wb") as f:
+            f.write(r.content)
+
+    # إنشاء خلفية داكنة راقية تلقائياً إذا لم تكن موجودة
+    bg_path = "assets/background.jpg"
+    if not os.path.exists(bg_path):
+        print("توليد خلفية الفيديو الأساسية...")
+        bg = Image.new("RGB", (1920, 1080), color=(12, 18, 22))
+        bg.save(bg_path, quality=95)
+
+    # إنشاء قالب الصورة المصغرة إذا لم يكن موجوداً
+    thumb_path = "assets/thumb_template.jpg"
+    if not os.path.exists(thumb_path):
+        print("توليد قالب الصورة المصغرة...")
+        thumb = Image.new("RGB", (1280, 720), color=(15, 23, 28))
+        thumb.save(thumb_path, quality=95)
+
 def download_audio(surah_num):
     filename = SURAHS[surah_num]["file"]
     url = f"https://server10.mp3quran.net/minsh/{filename}"
@@ -148,17 +173,18 @@ def create_thumbnail(surah_name):
     w = bbox[2] - bbox[0]
     h = bbox[3] - bbox[1]
     
-    x = 730 - (w / 2)
-    y = 230 - (h / 2)
+    x = (1280 - w) / 2
+    y = (720 - h) / 2
     
-    draw.text((x + 4, y + 4), bidi_text, font=font, fill=(20, 15, 10))
+    # رسم الظل والنص
+    draw.text((x + 4, y + 4), bidi_text, font=font, fill=(0, 0, 0))
     draw.text((x, y), bidi_text, font=font, fill=(245, 215, 135))
     
     img.save("thumbnail_final.jpg", quality=95)
     print("تم تجهيز الصورة المصغرة النهائية.")
 
 def build_video():
-    print("جاري دمج الفيديو وإضافة طبقة الحبيبات السينمائية (Film Grain Noise) عبر FFmpeg...")
+    print("جاري دمج الفيديو وإضافة طبقة الحبيبات عبر FFmpeg...")
     cmd = [
         "ffmpeg", "-y",
         "-loop", "1", "-i", "assets/background.jpg",
@@ -196,6 +222,7 @@ if __name__ == "__main__":
     with open("desc.txt", "w", encoding="utf-8") as f:
         f.write(desc)
 
+    ensure_assets()
     download_audio(surah_num)
     create_thumbnail(surah_name)
     build_video()
