@@ -1,4 +1,40 @@
-- name: Upload Video to YouTube via Official API
+name: Quran Video Auto Publisher
+
+on:
+  workflow_dispatch:
+    inputs:
+      surah_number:
+        description: 'اكتب رقم السورة (1 إلى 114) — مثال: 18 للكهف، 20 لطه'
+        required: true
+        default: '18'
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python Dependencies
+        run: |
+          pip install requests Pillow arabic-reshaper python-bidi google-api-python-client google-auth-httplib2 google-auth-oauthlib
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Generate Quran Video
+        env:
+          SURAH_NUMBER: ${{ github.event.inputs.surah_number }}
+        run: python pipeline.py
+
+      - name: Upload Video to YouTube via Official API
         env:
           CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
@@ -57,7 +93,6 @@
           video_id = response.get("id")
           print(f"✅ تم رفع الفيديو بنجاح! الرابط: https://youtu.be/{video_id}")
 
-          # رفع الصورة المصغرة المخصصة
           if os.path.exists("thumbnail_final.jpg"):
               print("3. جاري تعيين الصورة المصغرة...")
               try:
