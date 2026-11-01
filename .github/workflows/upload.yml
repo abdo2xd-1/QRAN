@@ -34,27 +34,13 @@ jobs:
           SURAH_NUMBER: ${{ github.event.inputs.surah_number }}
         run: python pipeline.py
 
-      - name: Install Rclone
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y rclone
-
-      - name: Upload Video to Google Drive via Rclone
-        env:
-          CONF_DATA: ${{ secrets.RCLONE_CONFIG_DATA }}
-        run: |
-          # كتابة الإعدادات في ملف صريح والتأكد من وجود البيانات
-          echo "$CONF_DATA" > /tmp/rclone.conf
-          
-          echo "جاري رفع الفيديو إلى مجلد Quran_Videos في Google Drive..."
-          rclone --config /tmp/rclone.conf copy output.mp4 gdrive:Quran_Videos/ --progress -v
-          
-          if [ -f "thumbnail_final.jpg" ]; then
-            rclone --config /tmp/rclone.conf copy thumbnail_final.jpg gdrive:Quran_Videos/ --progress
-          fi
-          if [ -f "title.txt" ]; then
-            rclone --config /tmp/rclone.conf copy title.txt gdrive:Quran_Videos/
-            rclone --config /tmp/rclone.conf copy desc.txt gdrive:Quran_Videos/
-          fi
-          
-          echo "✅ تم رفع الملفات بالكامل إلى مجلد Quran_Videos في Google Drive بنجاح!"
+      - name: Upload Video and Assets to GitHub Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Quran-Video-Output
+          path: |
+            output.mp4
+            thumbnail_final.jpg
+            title.txt
+            desc.txt
+          retention-days: 7
