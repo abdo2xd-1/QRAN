@@ -2,6 +2,7 @@ import os
 import re
 import io
 import time
+import urllib.parse
 import requests
 import subprocess
 from PIL import Image, ImageDraw, ImageFont
@@ -9,9 +10,8 @@ import arabic_reshaper
 from bidi.algorithm import get_display
 
 def fix_arabic_text(text):
-    # إزالة تشكيل القرآن والرموز الخاصة تماماً
+    # إزالة تشكيل القرآن والرموز الخاصة
     clean = re.sub(r'[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED]', '', text).strip()
-    # إعادة تشكيل الحروف العربية واتصالها
     configuration = {
         'delete_harakat': True,
         'support_ligatures': True,
@@ -29,47 +29,49 @@ def download_file(url, target_path):
             f.write(chunk)
 
 def generate_ai_image(prompt, hf_token, output_path):
-    """توليد فوري للصور بدقة 1080p عبر نموذج FLUX.1 السريع والمجاني"""
-    print(f"جاري طلب توليد الصورة عبر AI: {output_path}...")
+    print(f"\nجاري طلب توليد الصورة عبر الذكاء الاصطناعي: {output_path}...")
     
-    # نموذج FLUX.1-schnell مستقر وسريع جداً ومتاح مجاناً على Hugging Face
-    api_url = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell"
-    headers = {
-        "Authorization": f"Bearer {hf_token}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "inputs": prompt,
-        "parameters": {"width": 1024, "height": 576}
-    }
-
-    for attempt in range(5):
+    # 1. المحاولة الأولى: Hugging Face (FLUX.1)
+    if hf_token:
+        print("الاعتماد الأساسي على Hugging Face...")
+        api_url = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell"
+        headers = {"Authorization": f"Bearer {hf_token}", "Content-Type": "application/json"}
+        payload = {"inputs": prompt, "parameters": {"width": 1024, "height": 576}}
+        
         try:
-            res = requests.post(api_url, headers=headers, json=payload, timeout=120)
+            res = requests.post(api_url, headers=headers, json=payload, timeout=60)
             if res.status_code == 200:
                 img = Image.open(io.BytesIO(res.content)).convert("RGB").resize((1920, 1080), Image.Resampling.LANCZOS)
                 img.save(output_path, quality=95)
-                print(f"✅ تم توليد وحفظ الصورة بنجاح: {output_path}")
+                print(f"✅ تم توليد الصورة بنجاح عبر Hugging Face.")
                 return
-            elif res.status_code == 503:
-                wait_sec = res.json().get("estimated_time", 20)
-                print(f"النموذج قيد الإقلاع، الانتظار {int(wait_sec)} ثانية...")
-                time.sleep(wait_sec)
             else:
-                print(f"استجابة غير متوقعة ({res.status_code}): {res.text}")
-                time.sleep(5)
+                print(f"تنبيه: Hugging Face أرجع الاستجابة {res.status_code}")
         except Exception as e:
-            print(f"خطأ في الاتصال: {e}")
-            time.sleep(5)
+            print(f"فشل الاتصال بشبكة Hugging Face: {e}")
 
-    raise RuntimeError(f"فشل توليد {output_path} عبر الـ API. تأكد من صحة التوكن في Secrets.")
+    # 2. التبديل التلقائي: Pollinations AI (بديل مجاني لا يحتاج توكن)
+    print("جاري التبديل التلقائي لمحرك الذكاء الاصطناعي البديل (Pollinations AI)...")
+    try:
+        safe_prompt = urllib.parse.quote(prompt)
+        # استخدام دقة 720p لتجنب قيود الدفع (402) ثم رفعها لـ 1080p
+        poll_url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=1280&height=720&nologo=true"
+        res = requests.get(poll_url, timeout=60)
+        if res.status_code == 200:
+            img = Image.open(io.BytesIO(res.content)).convert("RGB").resize((1920, 1080), Image.Resampling.LANCZOS)
+            img.save(output_path, quality=95)
+            print(f"✅ تم توليد الصورة بنجاح عبر Pollinations AI.")
+            return
+    except Exception as e:
+        print(f"فشل المحرك البديل أيضاً: {e}")
+
+    # 3. الحماية القصوى: منع فشل الأكشن بالكامل
+    print("⚠️ تم إنشاء خلفية لونية احتياطية لضمان عدم تعطل دمج الفيديو...")
+    Image.new("RGB", (1920, 1080), (28, 20, 14)).save(output_path)
 
 def main():
     surah_num = int(os.environ.get("SURAH_NUMBER", "1").strip())
     hf_token = os.environ.get("API_KEY", "").strip()
-
-    if not hf_token:
-        raise ValueError("خطأ: لم يتم تمرير متغير البيئة API_KEY!")
 
     # 1. بيانات السورة
     meta = requests.get(f"https://api.alquran.cloud/v1/surah/{surah_num}").json()
@@ -90,7 +92,7 @@ def main():
     if not os.path.exists(font_file):
         download_file("https://github.com/google/fonts/raw/main/ofl/amiri/Amiri-Bold.ttf", font_file)
 
-    # 4. توليد خلفية الفيديو التراثية عبر الـ AI
+    # 4. توليد خلفية الفيديو التراثية
     bg_prompt = (
         "Cinematic ultra detailed shot of cozy traditional Islamic room, open Holy Quran on wooden rehal stand, "
         "vintage wooden radio, warm lantern on Persian carpet, open wooden mashrabiya window overlooking minaret at sunset, 8k, photorealistic"
