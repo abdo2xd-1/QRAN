@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       surah_number:
-        description: 'اكتب رقم السورة (1 إلى 114) — مثال: 18 للكهف، 20 لطه، 36 ليس'
+        description: 'اكتب رقم السورة (1 إلى 114) — مثال: 18 للكهف، 20 لطه'
         required: true
         default: '18'
 
@@ -15,10 +15,11 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Install FFmpeg
+      - name: Install FFmpeg & Node.js
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
+          sudo npm install -g youtube-video-upload
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -27,12 +28,26 @@ jobs:
 
       - name: Install Python Dependencies
         run: |
-          pip install requests Pillow arabic-reshaper python-bidi google-auth google-auth-oauthlib
+          pip install requests Pillow arabic-reshaper python-bidi
 
-      - name: Run Quran Publisher
+      - name: Generate Quran Video
         env:
           SURAH_NUMBER: ${{ github.event.inputs.surah_number }}
-          CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
-          CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
-          REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
         run: python pipeline.py
+
+      - name: Save Cookies File
+        env:
+          COOKIES_DATA: ${{ secrets.YOUTUBE_COOKIES }}
+        run: |
+          echo "$COOKIES_DATA" > cookies.txt
+
+      - name: Upload Video to YouTube
+        run: |
+          youtube-video-upload \
+            --email "abdo31xd@gmail.com" \
+            --cookies "cookies.txt" \
+            --file "output.mp4" \
+            --title "$(< title.txt)" \
+            --description "$(< desc.txt)" \
+            --thumbnail "thumbnail_final.jpg" \
+            --privacy "public"
