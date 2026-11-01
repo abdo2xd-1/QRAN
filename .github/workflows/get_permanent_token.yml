@@ -1,75 +1,47 @@
-name: Get Lifetime YouTube Token
+name: Quran Video Auto Publisher
 
 on:
   workflow_dispatch:
+    inputs:
+      surah_number:
+        description: 'رقم السورة من 1 إلى 114'
+        required: true
+        default: '1'
 
 jobs:
-  get-token:
+  build-and-publish:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install Requests
-        run: pip install requests
-
-      - name: Authenticate with Google
-        env:
-          CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
-          CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+      - name: Install Python Dependencies
         run: |
-          python - << 'EOF'
-          import os, time, sys, requests
+          pip install requests Pillow arabic-reshaper python-bidi
 
-          c_id = os.environ.get("CLIENT_ID", "").strip()
-          c_sec = os.environ.get("CLIENT_SECRET", "").strip()
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
 
-          # طلب كود جهاز جديد
-          req = requests.post("https://oauth2.googleapis.com/device/code", data={
-              "client_id": c_id,
-              "scope": "https://www.googleapis.com/auth/youtube.upload"
-          }).json()
+      - name: Generate Quran Video
+        env:
+          SURAH_NUMBER: ${{ github.event.inputs.surah_number }}
+          API_KEY: ${{ secrets.API_KEY }}
+        run: python pipeline.py
 
-          if "device_code" not in req:
-              print("خطأ في الاتصال بجوجل:", req)
-              sys.exit(1)
-
-          d_code = req["device_code"]
-          u_code = req["user_code"]
-          url = req.get("verification_url", "https://www.google.com/device")
-          interval = req.get("interval", 5)
-
-          print("\n" + "="*60)
-          print(f"1. افتح هذا الرابط: {url}")
-          print(f"2. ادخل هذا الكود: {u_code}")
-          print("="*60 + "\n")
-          sys.stdout.flush()
-
-          while True:
-              time.sleep(interval)
-              res = requests.post("https://oauth2.googleapis.com/token", data={
-                  "client_id": c_id,
-                  "client_secret": c_sec,
-                  "code": d_code,
-                  "grant_type": "http://oauth.net/grant_type/device/1.0"
-              }).json()
-
-              if "refresh_token" in res:
-                  print("\n" + "#"*60)
-                  print("تم استخراج التوكن الدائم بنجاح:")
-                  print(res["refresh_token"])
-                  print("#"*60 + "\n")
-                  break
-              
-              err = res.get("error")
-              if err == "authorization_pending":
-                  print("... بانتظار إدخال الكود والموافقة في صفحة المتصفح")
-                  sys.stdout.flush()
-              elif err == "slow_down":
-                  time.sleep(interval + 5)
-              else:
-                  print("خطأ غير متوقع من جوجل:", res)
-                  sys.exit(1)
-          EOF
+      - name: Upload Video and Assets to GitHub Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Quran-Video-Output
+          path: |
+            output.mp4
+            thumbnail_final.jpg
+            title.txt
+            desc.txt
+          retention-days: 7
