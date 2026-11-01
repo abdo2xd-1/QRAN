@@ -6,108 +6,81 @@ from PIL import Image, ImageDraw, ImageFont
 import arabic_reshaper
 from bidi.algorithm import get_display
 
-def clean_and_fix_arabic(text):
-    """إزالة علامات التشكيل المعقدة لضبط اتصال الكلمات العربية واتجاهها تماماً"""
-    # إزالة التشكيل وحركات المصحف
-    tashkeel_regex = re.compile(r'[\u0617-\u061A\u064B-\u0652\u0670\u06D6-\u06ED]')
-    text_clean = re.sub(tashkeel_regex, '', text)
-    
-    # تصحيح الاتصال وتعديل الاتجاه من اليمين لليسار
-    configuration = {
-        'delete_harakat': True,
-        'support_ligatures': True
-    }
-    reshaper = arabic_reshaper.ArabicReshaper(configuration)
-    reshaped_text = reshaper.reshape(text_clean)
-    return get_display(reshaped_text)
+def fix_arabic_text(text):
+    # إزالة تشكيل المصحف لتفادي انقلاب وانفصال الحروف
+    clean_text = re.sub(r'[\u0617-\u061A\u064B-\u0652\u0670\u06D6-\u06ED]', '', text)
+    # تشكيل واتصال الحروف وضبط اتجاه القراءة من اليمين لليسار
+    reshaped = arabic_reshaper.reshape(clean_text)
+    return get_display(reshaped)
 
-def download_file(url, target_path):
-    response = requests.get(url, stream=True)
-    response.raise_for_status()
-    with open(target_path, 'wb') as f:
-        for chunk in response.iter_content(chunk_size=8192):
-            f.write(chunk)
+def get_existing_file(base_name):
+    # البحث عن الملف بكل الامتدادات الممكنة سواء حروف صغيرة أو كبيرة
+    for ext in ['jpg', 'jpeg', 'png', 'JPG', 'JPEG', 'PNG']:
+        filename = f"{base_name}.{ext}"
+        if os.path.exists(filename):
+            return filename
+    return None
 
 def main():
-    surah_num = os.environ.get("SURAH_NUMBER", "1").strip()
-    surah_num_int = int(surah_num)
+    surah_num = int(os.environ.get("SURAH_NUMBER", "1").strip())
 
-    # 1. جلب اسم السورة
-    meta_url = f"https://api.alquran.cloud/v1/surah/{surah_num_int}"
-    meta_res = requests.get(meta_url).json()
-    raw_name = meta_res["data"]["name"]
-    surah_name_clean = clean_and_fix_arabic(raw_name)
+    # 1. جلب بيانات السورة
+    res = requests.get(f"https://api.alquran.cloud/v1/surah/{surah_num}").json()
+    raw_name = res["data"]["name"]
+    surah_title = fix_arabic_text(raw_name)
 
-    print(f"تم اختيار: {raw_name} -> بعد التصحيح: {surah_name_clean}")
-
+    # حفظ نصوص العنوان والوصف
     with open("title.txt", "w", encoding="utf-8") as f:
         f.write(f"{raw_name} كاملة بصوت الشيخ محمد صديق المنشاوي")
-
     with open("desc.txt", "w", encoding="utf-8") as f:
-        f.write(f"تلاوة خاشعة لـ {raw_name} بصوت القارئ الشيخ محمد صديق المنشاوي رحمة الله عليه.\n\nاستمع للقرآن الكريم بجودة عالية.")
+        f.write(f"تلاوة مباركة لـ {raw_name} بصوت الشيخ محمد صديق المنشاوي.")
 
-    # 2. تحميل تلاوة الشيخ المنشاوي
-    audio_num_str = f"{surah_num_int:03d}"
-    audio_url = f"https://server10.mp3quran.net/minsh/{audio_num_str}.mp3"
+    # 2. تحميل ملف الصوت للسورة
     audio_file = "audio.mp3"
-    print(f"جاري تحميل الصوت: {audio_url}")
-    download_file(audio_url, audio_file)
+    audio_url = f"https://server10.mp3quran.net/minsh/{surah_num:03d}.mp3"
+    with requests.get(audio_url, stream=True) as r:
+        with open(audio_file, 'wb') as f:
+            for chunk in r.iter_content(8192):
+                f.write(chunk)
 
-    # 3. تحميل الخط العربي الأصيل
+    # 3. تحميل الخط العربي
     font_file = "Amiri-Bold.ttf"
     if not os.path.exists(font_file):
         font_url = "https://github.com/google/fonts/raw/main/ofl/amiri/Amiri-Bold.ttf"
-        download_file(font_url, font_file)
+        with requests.get(font_url) as r:
+            with open(font_file, 'wb') as f:
+                f.write(r.content)
 
-    # 4. تجهيز الصورة المصغرة (Thumbnail)
-    thumb_w, thumb_h = 1920, 1080
-    
-    # البحث عن القالب بأي امتداد كان
-    template_path = None
-    for ext in ["png", "jpg", "jpeg", "PNG", "JPG"]:
-        if os.path.exists(f"thumb_template.{ext}"):
-            template_path = f"thumb_template.{ext}"
-            break
-
-    if template_path:
-        print(f"تم العثور على قالب الغلاف: {template_path}")
-        thumb_img = Image.open(template_path).convert("RGBA").resize((thumb_w, thumb_h))
+    # 4. توليد الصورة المصغرة (Thumbnail)
+    thumb_template = get_existing_file("thumb_template")
+    if thumb_template:
+        thumb_img = Image.open(thumb_template).convert("RGBA").resize((1920, 1080))
     else:
-        print("تحذير: لم يتم العثور على thumb_template، جاري إنشاء خلفية افتراضية.")
-        thumb_img = Image.new("RGBA", (thumb_w, thumb_h), color=(18, 25, 20, 255))
+        thumb_img = Image.new("RGBA", (1920, 1080), (18, 25, 20, 255))
 
     draw = ImageDraw.Draw(thumb_img)
-    title_font = ImageFont.truetype(font_file, 130)
+    font = ImageFont.truetype(font_file, 130)
 
-    # حساب موقع الكتابة في منتصف الإطار المخصص
-    bbox = draw.textbbox((0, 0), surah_name_clean, font=title_font)
+    # محاذاة النص في مكان الإطار
+    bbox = draw.textbbox((0, 0), surah_title, font=font)
     tw = bbox[2] - bbox[0]
-    tx = int(thumb_w * 0.58) - (tw // 2)
-    ty = int(thumb_h * 0.38)
+    tx = int(1920 * 0.58) - (tw // 2)
+    ty = int(1080 * 0.38)
 
-    # رسم ظل ثم كتابة النص باللون الذهبي
-    draw.text((tx + 4, ty + 4), surah_name_clean, font=title_font, fill=(0, 0, 0, 240))
-    draw.text((tx, ty), surah_name_clean, font=title_font, fill=(245, 215, 110))
+    # رسم ظل أسود ثم النص الذهبي
+    draw.text((tx + 3, ty + 3), surah_title, font=font, fill=(0, 0, 0, 220))
+    draw.text((tx, ty), surah_title, font=font, fill=(245, 215, 110))
 
-    thumb_final = thumb_img.convert("RGB")
-    thumb_final.save("thumbnail_final.jpg", quality=95)
+    thumb_final = "thumbnail_final.jpg"
+    thumb_img.convert("RGB").save(thumb_final, quality=95)
 
-    # 5. اختيار خلفية الفيديو التراثية
-    video_bg = None
-    for ext in ["jpg", "jpeg", "png", "JPG", "PNG"]:
-        if os.path.exists(f"bg_video.{ext}"):
-            video_bg = f"bg_video.{ext}"
-            break
-
+    # 5. تحديد خلفية الفيديو
+    video_bg = get_existing_file("bg_video")
     if not video_bg:
-        print("تحذير: لم يتم العثور على bg_video، سيتم استخدام صورة الغلاف.")
-        video_bg = "thumbnail_final.jpg"
-    else:
-        print(f"تم العثور على خلفية الفيديو: {video_bg}")
+        video_bg = thumb_final
 
     # 6. دمج الصوت مع الصورة عبر FFmpeg
-    print("جاري تصدير الفيديو عبر FFmpeg...")
-    ffmpeg_cmd = [
+    cmd = [
         "ffmpeg", "-y",
         "-loop", "1",
         "-i", video_bg,
@@ -121,8 +94,7 @@ def main():
         "-shortest",
         "output.mp4"
     ]
-    subprocess.run(ffmpeg_cmd, check=True)
-    print("✅ تم بنجاح إنتاج الفيديو والصورة المصغرة السليمة!")
+    subprocess.run(cmd, check=True)
 
 if __name__ == "__main__":
     main()
