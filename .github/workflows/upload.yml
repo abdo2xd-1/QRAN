@@ -23,35 +23,13 @@ jobs:
       - name: Install Python Dependencies
         run: |
           pip install requests Pillow arabic-reshaper python-bidi yt-dlp playwright
-          playwright install chromium
+          playwright install --with-deps chromium
 
       - name: Save Cookies File
         env:
           COOKIES_DATA: ${{ secrets.YOUTUBE_COOKIES }}
         run: |
           echo "$COOKIES_DATA" > cookies.txt
-
-      - name: Test YouTube Authentication (فحص الكوكيز أولاً)
-        run: |
-          python - << 'EOF'
-          import sys, subprocess
-
-          print("جاري التحقق من صحة الكوكيز وصلاحية تسجيل الدخول في YouTube...")
-          cmd = [
-              "yt-dlp",
-              "--cookies", "cookies.txt",
-              "--print", "uploader",
-              "https://www.youtube.com/feed/history"
-          ]
-          res = subprocess.run(cmd, capture_output=True, text=True)
-
-          if res.returncode != 0 and ("Sign in" in res.stderr or "login" in res.stderr.lower()):
-              print("❌ فشل التحقق: ملف الكوكيز غير صالح أو جلسة تسجيل الدخول منتهية.")
-              print(res.stderr)
-              sys.exit(1)
-
-          print("✅ تم التحقق من الكوكيز بنجاح! جلسة تسجيل الدخول نشطة وجاهزة للرفع.")
-          EOF
 
       - name: Install FFmpeg
         run: |
@@ -72,9 +50,7 @@ jobs:
           title = open("title.txt", "r", encoding="utf-8").read().strip()
           desc = open("desc.txt", "r", encoding="utf-8").read().strip()
 
-          print("بدء عملية الرفع إلى استوديو YouTube عبر الجلسة الموثقة...")
-
-          # تحويل cookies.txt إلى صيغة Playwright
+          # تحويل cookies.txt إلى صيغة تدعم متصفح Playwright
           cookies = []
           with open("cookies.txt", "r", encoding="utf-8", errors="ignore") as f:
               for line in f:
@@ -82,69 +58,95 @@ jobs:
                       continue
                   parts = line.strip().split("\t")
                   if len(parts) >= 7:
-                      cookies.append({
-                          "domain": parts[0],
-                          "path": parts[2],
-                          "secure": parts[3].lower() == "true",
-                          "expires": int(parts[4]) if parts[4].isdigit() else -1,
+                      cookie_dict = {
                           "name": parts[5],
-                          "value": parts[6]
-                      })
+                          "value": parts[6],
+                          "domain": parts[0] if parts[0].startswith(".") else "." + parts[0],
+                          "path": parts[2],
+                          "secure": parts[3].lower() == "true"
+                      }
+                      cookies.append(cookie_dict)
+
+          print(f"تم تحميل {len(cookies)} قيمة تعريفية من ملف الكوكيز.")
+
+          user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
           with sync_playwright() as p:
-              browser = p.chromium.launch(headless=True)
-              context = browser.new_context()
+              browser = p.chromium.launch(
+                  headless=True,
+                  args=[
+                      "--disable-blink-features=AutomationControlled",
+                      "--no-sandbox",
+                      "--disable-setuid-sandbox"
+                  ]
+              )
+              context = browser.new_context(
+                  user_agent=user_agent,
+                  viewport={"width": 1920, "height": 1080},
+                  locale="ar-EG"
+              )
               context.add_cookies(cookies)
 
               page = context.new_page()
-              page.goto("https://studio.youtube.com", timeout=60000)
-              page.wait_for_load_state("networkidle")
+              print("جاري فتح استوديو YouTube مباشرة...")
+              page.goto("https://studio.youtube.com", timeout=90000, wait_until="domcontentloaded")
+              time.sleep(5)
 
-              if "signin" in page.url:
-                  print("❌ فشل الدخول إلى استوديو يوتيوب: يلزم تجديد الكوكيز.")
+              print(f"الرابط الحالي للمتصفح: {page.url}")
+
+              if "accounts.google.com" in page.url:
+                  # إذا طلبت جوجل تأكيد، نلتقط صورة للتشخيص
+                  page.screenshot(path="auth_failed.png")
+                  print("❌ رفض خادم Google جلسة الاستوديو التلقائية وطلب تسجيل دخول جديد.")
                   sys.exit(1)
 
-              print("تم الدخول إلى استوديو YouTube بنجاح، جاري إرسال ملف الفيديو...")
-              # الضغط على زر الرفع
-              create_btn = page.locator("#create-icon, button:has-text('Create'), button:has-text('إنشاء')").first
-              create_btn.click()
+              print("تم الدخول إلى استوديو YouTube بنجاح! جاري رفع ملف الفيديو...")
+
+              # الضغط على زر إنشاء / رفع
+              upload_btn = page.locator("#create-icon, #upload-icon, button:has-text('Create'), button:has-text('إنشاء')").first
+              upload_btn.wait_for(state="visible", timeout=30000)
+              upload_btn.click()
               time.sleep(2)
 
-              upload_item = page.locator("tp-yt-paper-item:has-text('Upload videos'), tp-yt-paper-item:has-text('تحميل فيديوهات')").first
-              upload_item.click()
-              time.sleep(2)
+              # اختيار رفع فيديو
+              upload_choice = page.locator("tp-yt-paper-item:has-text('Upload videos'), tp-yt-paper-item:has-text('تحميل فيديوهات')").first
+              if upload_choice.is_visible():
+                  upload_choice.click()
+                  time.sleep(2)
 
-              # تمرير ملف الفيديو
+              # تحديد ملف الفيديو
               with page.expect_file_chooser() as fc_info:
-                  page.locator("#select-files-button, input[type='file']").first.click()
+                  file_btn = page.locator("#select-files-button, input[type='file']").first
+                  file_btn.click()
               file_chooser = fc_info.value
               file_chooser.set_files("output.mp4")
 
-              print("جاري إدخال العنوان والوصف وتأكيد الإعدادات...")
-              time.sleep(7)
+              print("تم اختيار ملف الفيديو بنجاح، جاري الانتظار حتى اكتمال تحميل عناصر الاستمارة...")
+              time.sleep(10)
 
-              # تحديد خيار 'غير مخصص للأطفال'
+              # خيار ليس مخصصاً للأطفال
               not_for_kids = page.locator("tp-yt-paper-radio-button[name='NOT_MADE_FOR_KIDS']").first
               if not_for_kids.is_visible():
                   not_for_kids.click()
 
-              # الانتقال عبر خطوات النشر حتى النهاية
-              for _ in range(3):
-                  next_btn = page.locator("#next-button").first
-                  if next_btn.is_visible():
-                      next_btn.click()
-                      time.sleep(2)
+              # الضغط على التالي حتى صفحة النشر
+              for i in range(3):
+                  nxt = page.locator("#next-button").first
+                  if nxt.is_visible():
+                      nxt.click()
+                      time.sleep(3)
 
-              # اختيار النشر كـ Public
-              public_radio = page.locator("tp-yt-paper-radio-button[name='PUBLIC']").first
-              if public_radio.is_visible():
-                  public_radio.click()
+              # اختيار علني (Public)
+              pub_radio = page.locator("tp-yt-paper-radio-button[name='PUBLIC']").first
+              if pub_radio.is_visible():
+                  pub_radio.click()
 
-              # الضغط على حفظ / نشر
+              # زر الحفظ النهائي
               done_btn = page.locator("#done-button").first
-              done_btn.click()
-              time.sleep(5)
+              if done_btn.is_visible():
+                  done_btn.click()
+                  time.sleep(7)
 
-              print("✅ تم تقديم طلب رفع الفيديو بنجاح وجاري المعالجة داخل قناتك!")
+              print("✅ تم إرسال ونشر الفيديو بنجاح على قناتك!")
               browser.close()
           EOF
