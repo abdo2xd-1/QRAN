@@ -15,11 +15,6 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Install FFmpeg
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -27,12 +22,8 @@ jobs:
 
       - name: Install Python Dependencies
         run: |
-          pip install requests Pillow arabic-reshaper python-bidi yt-uploader
-
-      - name: Generate Quran Video
-        env:
-          SURAH_NUMBER: ${{ github.event.inputs.surah_number }}
-        run: python pipeline.py
+          pip install requests Pillow arabic-reshaper python-bidi yt-dlp playwright
+          playwright install chromium
 
       - name: Save Cookies File
         env:
@@ -40,23 +31,120 @@ jobs:
         run: |
           echo "$COOKIES_DATA" > cookies.txt
 
+      - name: Test YouTube Authentication (فحص الكوكيز أولاً)
+        run: |
+          python - << 'EOF'
+          import sys, subprocess
+
+          print("جاري التحقق من صحة الكوكيز وصلاحية تسجيل الدخول في YouTube...")
+          cmd = [
+              "yt-dlp",
+              "--cookies", "cookies.txt",
+              "--print", "uploader",
+              "https://www.youtube.com/feed/history"
+          ]
+          res = subprocess.run(cmd, capture_output=True, text=True)
+
+          if res.returncode != 0 and ("Sign in" in res.stderr or "login" in res.stderr.lower()):
+              print("❌ فشل التحقق: ملف الكوكيز غير صالح أو جلسة تسجيل الدخول منتهية.")
+              print(res.stderr)
+              sys.exit(1)
+
+          print("✅ تم التحقق من الكوكيز بنجاح! جلسة تسجيل الدخول نشطة وجاهزة للرفع.")
+          EOF
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Generate Quran Video
+        env:
+          SURAH_NUMBER: ${{ github.event.inputs.surah_number }}
+        run: python pipeline.py
+
       - name: Upload Video to YouTube
         run: |
           python - << 'EOF'
-          import os, sys
-          from yt_uploader import Uploader
+          import os, sys, time
+          from playwright.sync_api import sync_playwright
 
           title = open("title.txt", "r", encoding="utf-8").read().strip()
           desc = open("desc.txt", "r", encoding="utf-8").read().strip()
 
-          print("جاري رفع الفيديو عبر جلسة الكوكيز...")
-          uploader = Uploader(cookie_file="cookies.txt")
-          video_id = uploader.upload(
-              file_path="output.mp4",
-              title=title,
-              description=desc,
-              thumbnail="thumbnail_final.jpg",
-              tags=["قرآن", "المنشاوي", "تلاوات"]
-          )
-          print(f"تم رفع الفيديو بنجاح! الرابط: https://youtu.be/{video_id}")
+          print("بدء عملية الرفع إلى استوديو YouTube عبر الجلسة الموثقة...")
+
+          # تحويل cookies.txt إلى صيغة Playwright
+          cookies = []
+          with open("cookies.txt", "r", encoding="utf-8", errors="ignore") as f:
+              for line in f:
+                  if line.startswith("#") or not line.strip():
+                      continue
+                  parts = line.strip().split("\t")
+                  if len(parts) >= 7:
+                      cookies.append({
+                          "domain": parts[0],
+                          "path": parts[2],
+                          "secure": parts[3].lower() == "true",
+                          "expires": int(parts[4]) if parts[4].isdigit() else -1,
+                          "name": parts[5],
+                          "value": parts[6]
+                      })
+
+          with sync_playwright() as p:
+              browser = p.chromium.launch(headless=True)
+              context = browser.new_context()
+              context.add_cookies(cookies)
+
+              page = context.new_page()
+              page.goto("https://studio.youtube.com", timeout=60000)
+              page.wait_for_load_state("networkidle")
+
+              if "signin" in page.url:
+                  print("❌ فشل الدخول إلى استوديو يوتيوب: يلزم تجديد الكوكيز.")
+                  sys.exit(1)
+
+              print("تم الدخول إلى استوديو YouTube بنجاح، جاري إرسال ملف الفيديو...")
+              # الضغط على زر الرفع
+              create_btn = page.locator("#create-icon, button:has-text('Create'), button:has-text('إنشاء')").first
+              create_btn.click()
+              time.sleep(2)
+
+              upload_item = page.locator("tp-yt-paper-item:has-text('Upload videos'), tp-yt-paper-item:has-text('تحميل فيديوهات')").first
+              upload_item.click()
+              time.sleep(2)
+
+              # تمرير ملف الفيديو
+              with page.expect_file_chooser() as fc_info:
+                  page.locator("#select-files-button, input[type='file']").first.click()
+              file_chooser = fc_info.value
+              file_chooser.set_files("output.mp4")
+
+              print("جاري إدخال العنوان والوصف وتأكيد الإعدادات...")
+              time.sleep(7)
+
+              # تحديد خيار 'غير مخصص للأطفال'
+              not_for_kids = page.locator("tp-yt-paper-radio-button[name='NOT_MADE_FOR_KIDS']").first
+              if not_for_kids.is_visible():
+                  not_for_kids.click()
+
+              # الانتقال عبر خطوات النشر حتى النهاية
+              for _ in range(3):
+                  next_btn = page.locator("#next-button").first
+                  if next_btn.is_visible():
+                      next_btn.click()
+                      time.sleep(2)
+
+              # اختيار النشر كـ Public
+              public_radio = page.locator("tp-yt-paper-radio-button[name='PUBLIC']").first
+              if public_radio.is_visible():
+                  public_radio.click()
+
+              # الضغط على حفظ / نشر
+              done_btn = page.locator("#done-button").first
+              done_btn.click()
+              time.sleep(5)
+
+              print("✅ تم تقديم طلب رفع الفيديو بنجاح وجاري المعالجة داخل قناتك!")
+              browser.close()
           EOF
