@@ -15,11 +15,10 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Install FFmpeg & Node.js
+      - name: Install FFmpeg
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
-          sudo npm install -g youtube-video-upload
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -28,7 +27,7 @@ jobs:
 
       - name: Install Python Dependencies
         run: |
-          pip install requests Pillow arabic-reshaper python-bidi
+          pip install requests Pillow arabic-reshaper python-bidi yt-uploader
 
       - name: Generate Quran Video
         env:
@@ -43,11 +42,21 @@ jobs:
 
       - name: Upload Video to YouTube
         run: |
-          youtube-video-upload \
-            --email "abdo31xd@gmail.com" \
-            --cookies "cookies.txt" \
-            --file "output.mp4" \
-            --title "$(< title.txt)" \
-            --description "$(< desc.txt)" \
-            --thumbnail "thumbnail_final.jpg" \
-            --privacy "public"
+          python - << 'EOF'
+          import os, sys
+          from yt_uploader import Uploader
+
+          title = open("title.txt", "r", encoding="utf-8").read().strip()
+          desc = open("desc.txt", "r", encoding="utf-8").read().strip()
+
+          print("جاري رفع الفيديو عبر جلسة الكوكيز...")
+          uploader = Uploader(cookie_file="cookies.txt")
+          video_id = uploader.upload(
+              file_path="output.mp4",
+              title=title,
+              description=desc,
+              thumbnail="thumbnail_final.jpg",
+              tags=["قرآن", "المنشاوي", "تلاوات"]
+          )
+          print(f"تم رفع الفيديو بنجاح! الرابط: https://youtu.be/{video_id}")
+          EOF
