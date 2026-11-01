@@ -43,13 +43,11 @@ jobs:
       - name: Upload Video to YouTube
         run: |
           python - << 'EOF'
-          import os, sys, json, requests, http.cookiejar
+          import os, sys, time, json, requests, http.cookiejar, hashlib
 
-          # 1. قراءة النصوص
           title = open("title.txt", "r", encoding="utf-8").read().strip()
           desc = open("desc.txt", "r", encoding="utf-8").read().strip()
 
-          # 2. تحميل ملف الكوكيز بصيغة Netscape
           cj = http.cookiejar.MozillaCookieJar('cookies.txt')
           try:
               cj.load(ignore_discard=True, ignore_expires=True)
@@ -59,36 +57,74 @@ jobs:
 
           session = requests.Session()
           session.cookies = cj
-          session.headers.update({
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-              "Accept-Language": "ar,en-US;q=0.9,en;q=0.8",
-          })
 
-          print("1. جاري جلب جلسة استوديو يوتيوب والـ Token الداخلي...")
-          res = session.get("https://studio.youtube.com")
-          if "signin" in res.url or "accounts.google.com" in res.url:
-              print("❌ ملف الكوكيز غير مصرح له أو يحتاج لتصدير حديث من داخل رابط studio.youtube.com")
+          # جلب قيمة SAPISID لتوليد توثيق SAPISIDHASH
+          sapisid = None
+          for c in cj:
+              if c.name in ["SAPISID", "__Secure-3PAPISID"]:
+                  sapisid = c.value
+                  break
+
+          if not sapisid:
+              print("❌ ملف الكوكيز لا يحتوي على SAPISID. تأكد من نسخه كاملاً.")
               sys.exit(1)
 
-          # استخراج session token (INNERTUBE_API_KEY و PAPISID)
-          content = res.text
-          api_key = None
-          if '"INNERTUBE_API_KEY":"' in content:
-              api_key = content.split('"INNERTUBE_API_KEY":"')[1].split('"')[0]
+          curr_time = str(int(time.time()))
+          origin = "https://www.youtube.com"
+          hash_input = f"{curr_time} {sapisid} {origin}"
+          sha1_hash = hashlib.sha1(hash_input.encode("utf-8")).hexdigest()
+          auth_header = f"SAPISIDHASH {curr_time}_{sha1_hash}"
 
-          print("2. تم الاتصال باستوديو يوتيوب بنجاح.")
-          print("3. جاري بدء رفع الفيديو إلى خوادم يوتيوب...")
+          session.headers.update({
+              "Authorization": auth_header,
+              "X-Origin": origin,
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+              "Content-Type": "application/json"
+          })
 
-          # نستخدم أداة yt-dlp أو سكربت الرفع المتوافق
+          print("1. جاري بدء طلب رفع الفيديو عبر Resumable Upload API...")
           file_size = os.path.getsize("output.mp4")
-          print(f"حجم الفيديو: {round(file_size / (1024*1024), 2)} ميجابايت")
 
-          # أمر رفع مباشر بدون واجهة متصفح
-          import subprocess
-          cmd = [
-              sys.executable, "-m", "pip", "install", "simple-youtube-api"
-          ]
-          subprocess.run(cmd, stdout=subprocess.DEVNULL)
+          init_url = "https://upload.youtube.com/upload/studio"
+          headers_init = {
+              "X-Goog-Upload-Command": "start",
+              "X-Goog-Upload-Header-Content-Length": str(file_size),
+              "X-Goog-Upload-Protocol": "resumable"
+          }
 
-          print("✅ اكتملت مرحلة التهيئة، جاري إرسال البيانات...")
+          res = session.post(init_url, headers=headers_init)
+          upload_url = res.headers.get("X-Goog-Upload-URL")
+
+          if not upload_url:
+              print("فشل الحصول على رابط الرفع المباشر. الرد:", res.status_code, res.text[:200])
+              sys.exit(1)
+
+          print("2. تم تجهيز رابط النقل. جاري رفع ملف الفيديو...")
+          with open("output.mp4", "rb") as f:
+              upload_headers = {
+                  "X-Goog-Upload-Command": "upload, finalize",
+                  "X-Goog-Upload-Offset": "0"
+              }
+              upload_res = session.post(upload_url, headers=upload_headers, data=f)
+
+          video_info = upload_res.json()
+          encrypted_id = video_info.get("encryptedVideoId")
+
+          if not encrypted_id:
+              print("فشل معالجة الفيديو في يوتيوب:", video_info)
+              sys.exit(1)
+
+          print(f"3. تم استقبال الفيديو! معرف الفيديو: {encrypted_id}")
+
+          # حفظ التعديلات للعنوان والوصف
+          meta_url = "https://studio.youtube.com/youtubei/v1/video_manager/metadata_update"
+          meta_payload = {
+              "encryptedVideoId": encrypted_id,
+              "title": {"newTitle": title},
+              "description": {"newDescription": desc},
+              "privacy": {"newPrivacy": "PUBLIC"}
+          }
+          session.post(meta_url, json=meta_payload)
+
+          print(f"✅ تم الرفع والنشر بنجاح! الرابط: https://youtu.be/{encrypted_id}")
           EOF
