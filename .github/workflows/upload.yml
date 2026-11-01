@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       surah_number:
-        description: 'اكتب رقم السورة (1 إلى 114) — مثال: 18 للكهف، 20 لطه'
+        description: 'رقم السورة من 1 إلى 114 (مثال: 1 للفاتحة، 18 للكهف)'
         required: true
-        default: '18'
+        default: '1'
 
 jobs:
   build-and-publish:
