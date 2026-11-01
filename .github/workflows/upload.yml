@@ -39,24 +39,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y rclone
 
-      - name: Setup Rclone Configuration
-        run: |
-          mkdir -p ~/.config/rclone
-          cat << 'EOF' > ~/.config/rclone/rclone.conf
-          ${{ secrets.RCLONE_CONFIG_DATA }}
-          EOF
-
       - name: Upload Video to Google Drive via Rclone
+        env:
+          CONF_DATA: ${{ secrets.RCLONE_CONFIG_DATA }}
         run: |
+          # كتابة الإعدادات في ملف صريح والتأكد من وجود البيانات
+          echo "$CONF_DATA" > /tmp/rclone.conf
+          
           echo "جاري رفع الفيديو إلى مجلد Quran_Videos في Google Drive..."
-          rclone copy output.mp4 gdrive:Quran_Videos/ --progress
+          rclone --config /tmp/rclone.conf copy output.mp4 gdrive:Quran_Videos/ --progress -v
           
           if [ -f "thumbnail_final.jpg" ]; then
-            rclone copy thumbnail_final.jpg gdrive:Quran_Videos/ --progress
+            rclone --config /tmp/rclone.conf copy thumbnail_final.jpg gdrive:Quran_Videos/ --progress
           fi
           if [ -f "title.txt" ]; then
-            rclone copy title.txt gdrive:Quran_Videos/
-            rclone copy desc.txt gdrive:Quran_Videos/
+            rclone --config /tmp/rclone.conf copy title.txt gdrive:Quran_Videos/
+            rclone --config /tmp/rclone.conf copy desc.txt gdrive:Quran_Videos/
           fi
           
           echo "✅ تم رفع الملفات بالكامل إلى مجلد Quran_Videos في Google Drive بنجاح!"
