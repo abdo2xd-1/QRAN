@@ -116,4 +116,51 @@ def main():
     # 1. جلب بيانات السورة
     res = requests.get(f"https://api.alquran.cloud/v1/surah/{surah_num}").json()
     raw_name = res["data"]["name"]
-    surah_title = fix_arabic_text(
+    surah_title = fix_arabic_text(raw_name)
+
+    # حفظ النصوص
+    with open("title.txt", "w", encoding="utf-8") as f:
+        f.write(f"{raw_name} كاملة بصوت الشيخ محمد صديق المنشاوي")
+    with open("desc.txt", "w", encoding="utf-8") as f:
+        f.write(f"تلاوة مباركة لـ {raw_name} بصوت الشيخ محمد صديق المنشاوي.")
+
+    # 2. تحميل تلاوة الشيخ المنشاوي
+    audio_file = "audio.mp3"
+    audio_url = f"https://server10.mp3quran.net/minsh/{surah_num:03d}.mp3"
+    with requests.get(audio_url, stream=True) as r:
+        with open(audio_file, 'wb') as f:
+            for chunk in r.iter_content(8192):
+                f.write(chunk)
+
+    # 3. تحميل الخط العربي
+    font_file = "Amiri-Bold.ttf"
+    if not os.path.exists(font_file):
+        font_url = "https://github.com/google/fonts/raw/main/ofl/amiri/Amiri-Bold.ttf"
+        with requests.get(font_url) as r:
+            with open(font_file, 'wb') as f:
+                f.write(r.content)
+
+    # 4. توليد الصور تلقائياً
+    generate_video_bg()
+    generate_thumbnail(surah_title)
+
+    # 5. الدمج بـ FFmpeg
+    cmd = [
+        "ffmpeg", "-y",
+        "-loop", "1",
+        "-i", "bg_video.jpg",
+        "-i", audio_file,
+        "-c:v", "libx264",
+        "-tune", "stillimage",
+        "-c:a", "aac",
+        "-b:a", "192k",
+        "-pix_fmt", "yuv420p",
+        "-vf", "scale=1920:1080",
+        "-shortest",
+        "output.mp4"
+    ]
+    subprocess.run(cmd, check=True)
+    print("🚀 تم إنتاج الفيديو والصورة بنجاح وبدون أي أخطاء!")
+
+if __name__ == "__main__":
+    main()
