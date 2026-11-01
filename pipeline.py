@@ -2,24 +2,120 @@ import os
 import re
 import requests
 import subprocess
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
 import arabic_reshaper
 from bidi.algorithm import get_display
 
 def fix_arabic_text(text):
-    # إزالة تشكيل المصحف لتفادي انقلاب وانفصال الحروف
+    # إزالة تشكيل المصحف لتجنب انقلاب أو انفصال الحروف
     clean_text = re.sub(r'[\u0617-\u061A\u064B-\u0652\u0670\u06D6-\u06ED]', '', text)
-    # تشكيل واتصال الحروف وضبط اتجاه القراءة من اليمين لليسار
+    # اتصال الحروف العربية وضبط اتجاه القراءة
     reshaped = arabic_reshaper.reshape(clean_text)
     return get_display(reshaped)
 
-def get_existing_file(base_name):
-    # البحث عن الملف بكل الامتدادات الممكنة سواء حروف صغيرة أو كبيرة
-    for ext in ['jpg', 'jpeg', 'png', 'JPG', 'JPEG', 'PNG']:
-        filename = f"{base_name}.{ext}"
-        if os.path.exists(filename):
-            return filename
-    return None
+def generate_video_bg():
+    """توليد خلفية تراثية دافئة للفيديو من الصفر (صورة الغرفة الهادئة)"""
+    width, height = 1920, 1080
+    img = Image.new("RGB", (width, height), color=(24, 18, 12))  # قاعدة بنية دافئة
+    draw = ImageDraw.Draw(img)
+
+    # 1. تدرج لوني يعطي انطباعاً دافئاً وتراثياً (إضاءة شمس الغروب)
+    for y in range(height):
+        # تدرج من البني الداكن إلى البرتقالي الدافئ الخفيف في الأعلى
+        r = int(24 + (y / height) * 20)
+        g = int(18 + (y / height) * 10)
+        b = int(12 + (y / height) * 5)
+        draw.line([(0, y), (width, y)], fill=(r, g, b))
+
+    # 2. إضافة طبقة زخرفية أو إطار إسلامي دافئ في الخلفية
+    # سنقوم برسم إطار داخلي رفيع جداً باللون الذهبي الخافت لإعطاء طابع شرقي
+    border_margin = 40
+    draw.rectangle(
+        [(border_margin, border_margin), (width - border_margin, height - border_margin)],
+        outline=(140, 105, 55), width=3
+    )
+    draw.rectangle(
+        [(border_margin + 10, border_margin + 10), (width - border_margin - 10, height - border_margin - 10)],
+        outline=(90, 70, 35), width=1
+    )
+
+    # إضافة لمسة خفيفة من الزخارف في الأركان الأربعة
+    corner_size = 60
+    for cx, cy, x_sign, y_sign in [
+        (border_margin, border_margin, 1, 1),
+        (width - border_margin, border_margin, -1, 1),
+        (border_margin, height - border_margin, 1, -1),
+        (width - border_margin, height - border_margin, -1, -1)
+    ]:
+        draw.line([(cx, cy), (cx + x_sign * corner_size, cy)], fill=(140, 105, 55), width=4)
+        draw.line([(cx, cy), (cx, cy + y_sign * corner_size)], fill=(140, 105, 55), width=4)
+
+    # 3. كتابة وسم "آيات قرآنية" أعلى اليسار بشكل تراثي
+    font_file = "Amiri-Bold.ttf"
+    if os.path.exists(font_file):
+        small_font = ImageFont.truetype(font_file, 40)
+        tag_text = fix_arabic("آيات قرآنية")
+        draw.text((80, 80), tag_text, font=small_font, fill=(180, 150, 100))
+
+    img.save("bg_video.jpg", quality=95)
+    print("✅ تم توليد خلفية الفيديو التراثية من الصفر بنجاح.")
+
+def generate_thumbnail(surah_title):
+    """توليد الصورة المصغرة (الشيخ المنشاوي والإطار الذهبي) تلقائياً"""
+    width, height = 1920, 1080
+    
+    # 1. إنشاء خلفية خضراء زيتونية داكنة مع تدرج إسلامي راقي
+    img = Image.new("RGB", (width, height), color=(15, 25, 18))
+    draw = ImageDraw.Draw(img)
+    
+    for y in range(height):
+        # تدرج من الأخضر الداكن جداً إلى الزيتوني
+        r = int(12 + (y / height) * 15)
+        g = int(22 + (y / height) * 12)
+        b = int(14 + (y / height) * 8)
+        draw.line([(0, y), (width, y)], fill=(r, g, b))
+
+    # 2. رسم الإطار الزخرفي الذهبي الكبير
+    draw.rectangle([(50, 50), (width - 50, height - 50)], outline=(197, 160, 89), width=5)
+    draw.rectangle([(65, 65), (width - 65, height - 65)], outline=(140, 110, 50), width=2)
+
+    # 3. محاكاة وجود الشيخ المنشاوي في الجانب الأيسر (برسم وتظليل كادر خاص)
+    # سنقوم بإنشاء تدرج مظلل أو رقعة هادئة لكتابة النصوص
+    font_file = "Amiri-Bold.ttf"
+    if os.path.exists(font_file):
+        # الخطوط الكبيرة والصغيرة
+        sub_font = ImageFont.truetype(font_file, 55)
+        large_font = ImageFont.truetype(font_file, 140)
+        reader_font = ImageFont.truetype(font_file, 70)
+
+        # "ماتيسر من"
+        intro_text = fix_arabic_text("ماتيسر من")
+        draw.text((1150, 200), intro_text, font=sub_font, fill=(240, 240, 240))
+
+        # "سُورَة الـ..."
+        draw.text((950, 320), surah_title, font=large_font, fill=(245, 215, 110))
+
+        # "بدون صدى صوت" داخل كادر دائري صغير
+        spec_text = fix_arabic_text("بدون صدى صوت")
+        draw.rectangle([(1100, 550), (1500, 630)], fill=(40, 30, 20), outline=(197, 160, 89), width=2)
+        draw.text((1150, 560), spec_text, font=ImageFont.truetype(font_file, 40), fill=(240, 240, 240))
+
+        # "الشيخ محمد صديق المنشاوي رحمه الله"
+        sheikh_intro = fix_arabic_text("الشيخ")
+        sheikh_name = fix_arabic_text("محمد صديق المنشاوي")
+        sheikh_sub = fix_arabic_text("رحمه الله")
+        
+        draw.text((1250, 700), sheikh_intro, font=sub_font, fill=(180, 180, 180))
+        draw.text((1050, 780), sheikh_name, font=reader_font, fill=(255, 255, 255))
+        draw.text((1220, 880), sheikh_sub, font=sub_font, fill=(180, 180, 180))
+
+        # في الجانب الأيسر، كود بديل يحاكي التلاوة (رسم صورة أو رمز مصحف بسيط)
+        draw.rectangle([(150, 200), (550, 880)], outline=(197, 160, 89), width=2)
+        placeholder_text = fix_arabic_text("تلاوة خاشعة")
+        draw.text((250, 500), placeholder_text, font=sub_font, fill=(197, 160, 89))
+
+    img.save("thumbnail_final.jpg", quality=95)
+    print("✅ تم توليد الغلاف الرقمي من الصفر بنجاح.")
 
 def main():
     surah_num = int(os.environ.get("SURAH_NUMBER", "1").strip())
@@ -29,13 +125,13 @@ def main():
     raw_name = res["data"]["name"]
     surah_title = fix_arabic_text(raw_name)
 
-    # حفظ نصوص العنوان والوصف
+    # حفظ النصوص
     with open("title.txt", "w", encoding="utf-8") as f:
         f.write(f"{raw_name} كاملة بصوت الشيخ محمد صديق المنشاوي")
     with open("desc.txt", "w", encoding="utf-8") as f:
         f.write(f"تلاوة مباركة لـ {raw_name} بصوت الشيخ محمد صديق المنشاوي.")
 
-    # 2. تحميل ملف الصوت للسورة
+    # 2. تحميل الصوت
     audio_file = "audio.mp3"
     audio_url = f"https://server10.mp3quran.net/minsh/{surah_num:03d}.mp3"
     with requests.get(audio_url, stream=True) as r:
@@ -51,50 +147,27 @@ def main():
             with open(font_file, 'wb') as f:
                 f.write(r.content)
 
-    # 4. توليد الصورة المصغرة (Thumbnail)
-    thumb_template = get_existing_file("thumb_template")
-    if thumb_template:
-        thumb_img = Image.open(thumb_template).convert("RGBA").resize((1920, 1080))
-    else:
-        thumb_img = Image.new("RGBA", (1920, 1080), (18, 25, 20, 255))
+    # 4. توليد الصور تلقائياً دون الاعتماد على أي صور خارجية
+    generate_video_bg()
+    generate_thumbnail(surah_title)
 
-    draw = ImageDraw.Draw(thumb_img)
-    font = ImageFont.truetype(font_file, 130)
-
-    # محاذاة النص في مكان الإطار
-    bbox = draw.textbbox((0, 0), surah_title, font=font)
-    tw = bbox[2] - bbox[0]
-    tx = int(1920 * 0.58) - (tw // 2)
-    ty = int(1080 * 0.38)
-
-    # رسم ظل أسود ثم النص الذهبي
-    draw.text((tx + 3, ty + 3), surah_title, font=font, fill=(0, 0, 0, 220))
-    draw.text((tx, ty), surah_title, font=font, fill=(245, 215, 110))
-
-    thumb_final = "thumbnail_final.jpg"
-    thumb_img.convert("RGB").save(thumb_final, quality=95)
-
-    # 5. تحديد خلفية الفيديو
-    video_bg = get_existing_file("bg_video")
-    if not video_bg:
-        video_bg = thumb_final
-
-    # 6. دمج الصوت مع الصورة عبر FFmpeg
+    # 5. دمج الفيديو عبر FFmpeg
     cmd = [
         "ffmpeg", "-y",
         "-loop", "1",
-        "-i", video_bg,
+        "-i", "bg_video.jpg",
         "-i", audio_file,
         "-c:v", "libx264",
         "-tune", "stillimage",
         "-c:a", "aac",
         "-b:a", "192k",
         "-pix_fmt", "yuv420p",
-        "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2",
+        "-vf", "scale=1920:1080",
         "-shortest",
         "output.mp4"
     ]
     subprocess.run(cmd, check=True)
+    print("🚀 تم إنتاج الفيديو والصورة المصغرة بالكامل وتلقائياً!")
 
 if __name__ == "__main__":
     main()
