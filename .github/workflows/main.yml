@@ -1,10 +1,7 @@
 name: Generate Quran Shorts
 
 on:
-  workflow_dispatch:
-  push:
-    paths:
-      - '*.mp3'
+  workflow_dispatch: # التشغيل هيتم بالزرار اليدوي لأننا مش هنرفع ملفات صوت تاني
 
 jobs:
   build-videos:
@@ -37,6 +34,7 @@ jobs:
         import os
         import glob
         import subprocess
+        import urllib.request
         import arabic_reshaper
         from bidi.algorithm import get_display
         from PIL import Image, ImageDraw, ImageFont
@@ -48,36 +46,52 @@ jobs:
             print("خطأ: تأكد من رفع صورة الخلفية base_room_empty.jpg في المستودع")
             exit(1)
 
-        audio_files = glob.glob("*.mp3")
-        if not audio_files:
-            print("لم يتم العثور على ملفات صوت بصيغة mp3.")
-            exit(0)
+        # 1. قائمة السور اللي هتتحمل أوتوماتيك من موقع mp3quran للشيخ المنشاوي
+        # الأرقام تمثل رقم السورة في المصحف (001 الفاتحة، 112 الإخلاص، وهكذا)
+        surahs = {
+            "001": "سورة الفاتحة",
+            "112": "سورة الإخلاص",
+            "113": "سورة الفلق",
+            "114": "سورة الناس"
+        }
+        base_url = "https://server10.mp3quran.net/minsh/"
 
+        print("جاري تحميل الصوتيات من الموقع...")
+        for num, name in surahs.items():
+            audio_url = f"{base_url}{num}.mp3"
+            local_filename = f"{name}.mp3"
+            if not os.path.exists(local_filename):
+                print(f"جاري تحميل {name}...")
+                urllib.request.urlretrieve(audio_url, local_filename)
+
+        # 2. معالجة وإنشاء الفيديوهات
+        audio_files = glob.glob("*.mp3")
         for audio_file in audio_files:
             surah_name = os.path.splitext(audio_file)[0]
             output_image = f"cover_{surah_name}.jpg"
             final_video = f"video_{surah_name}.mp4"
             
-            print(f"جاري معالجة: {surah_name}...")
+            print(f"جاري دمج الفيديو: {surah_name}...")
 
+            # تظبيط النص العربي
             text_to_write = f"الشيخ محمد صديق المنشاوي\n{surah_name}"
             reshaped_text = arabic_reshaper.reshape(text_to_write)
             bidi_text = get_display(reshaped_text)
 
+            # الكتابة على الصورة
             image = Image.open(base_image)
             draw = ImageDraw.Draw(image)
             font = ImageFont.truetype(font_path, 80)
-            
             draw.multiline_text((image.width/2, image.height/2), bidi_text, font=font, fill="#F5DEB3", anchor="mm", align="center")
             image.save(output_image)
 
+            # دمج الصوت والصورة مع تأثير التلفزيون
             ffmpeg_cmd = [
                 "ffmpeg", "-loop", "1", "-i", output_image, "-i", audio_file,
                 "-vf", "noise=alls=15:allf=t+u,eq=contrast=1.1:brightness=-0.05:saturation=0.7",
                 "-c:v", "libx264", "-tune", "stillimage", "-c:a", "aac", "-b:a", "192k",
                 "-pix_fmt", "yuv420p", "-shortest", "-y", final_video
             ]
-            
             subprocess.run(ffmpeg_cmd)
             print(f"تم بنجاح إنشاء فيديو: {final_video}\n")
         EOF
