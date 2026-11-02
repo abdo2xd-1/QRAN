@@ -29,7 +29,7 @@ jobs:
         pip install Pillow arabic-reshaper python-bidi
 
     - name: Download Arabic Font
-      run: wget -O Amiri-Bold.ttf https://github.com/googlefonts/amiri/raw/main/fonts/ttf/Amiri-Bold.ttf
+      run: wget -O Amiri-Bold.ttf https://raw.githubusercontent.com/google/fonts/main/ofl/amiri/Amiri-Bold.ttf
 
     - name: Create and Run Python Script
       run: |
