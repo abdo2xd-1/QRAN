@@ -1,8 +1,5 @@
 import os
 import re
-import io
-import time
-import urllib.parse
 import requests
 import subprocess
 from PIL import Image, ImageDraw, ImageFont
@@ -10,16 +7,10 @@ import arabic_reshaper
 from bidi.algorithm import get_display
 
 def fix_arabic_text(text):
-    # إزالة تشكيل القرآن والرموز الخاصة
-    clean = re.sub(r'[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED]', '', text).strip()
-    configuration = {
-        'delete_harakat': True,
-        'support_ligatures': True,
-        'shift_harakat_position': False
-    }
-    reshaper = arabic_reshaper.ArabicReshaper(configuration)
-    reshaped_text = reshaper.reshape(clean)
-    return get_display(reshaped_text)
+    # تنظيف صارم جداً: الاحتفاظ بالحروف العربية والمسافات فقط (يمنع انقلاب النص تماماً)
+    clean = re.sub(r'[^\u0621-\u064A\s]', '', text).strip()
+    reshaped = arabic_reshaper.reshape(clean)
+    return get_display(reshaped)
 
 def download_file(url, target_path):
     res = requests.get(url, stream=True, timeout=60)
@@ -28,50 +19,41 @@ def download_file(url, target_path):
         for chunk in res.iter_content(chunk_size=8192):
             f.write(chunk)
 
-def generate_ai_image(prompt, hf_token, output_path):
-    print(f"\nجاري طلب توليد الصورة عبر الذكاء الاصطناعي: {output_path}...")
+def get_pexels_image(query, api_key, output_path, image_index=0):
+    """جلب صورة عالية الجودة من Pexels وتجهيزها بأبعاد 1080p"""
+    print(f"جاري جلب صورة من Pexels للبحث: {query}...")
+    url = f"https://api.pexels.com/v1/search?query={query}&orientation=landscape&size=large&per_page=5"
+    headers = {"Authorization": api_key}
     
-    # 1. المحاولة الأولى: Hugging Face (FLUX.1)
-    if hf_token:
-        print("الاعتماد الأساسي على Hugging Face...")
-        api_url = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell"
-        headers = {"Authorization": f"Bearer {hf_token}", "Content-Type": "application/json"}
-        payload = {"inputs": prompt, "parameters": {"width": 1024, "height": 576}}
-        
-        try:
-            res = requests.post(api_url, headers=headers, json=payload, timeout=60)
-            if res.status_code == 200:
-                img = Image.open(io.BytesIO(res.content)).convert("RGB").resize((1920, 1080), Image.Resampling.LANCZOS)
-                img.save(output_path, quality=95)
-                print(f"✅ تم توليد الصورة بنجاح عبر Hugging Face.")
-                return
-            else:
-                print(f"تنبيه: Hugging Face أرجع الاستجابة {res.status_code}")
-        except Exception as e:
-            print(f"فشل الاتصال بشبكة Hugging Face: {e}")
-
-    # 2. التبديل التلقائي: Pollinations AI (بديل مجاني لا يحتاج توكن)
-    print("جاري التبديل التلقائي لمحرك الذكاء الاصطناعي البديل (Pollinations AI)...")
     try:
-        safe_prompt = urllib.parse.quote(prompt)
-        # استخدام دقة 720p لتجنب قيود الدفع (402) ثم رفعها لـ 1080p
-        poll_url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=1280&height=720&nologo=true"
-        res = requests.get(poll_url, timeout=60)
+        res = requests.get(url, headers=headers, timeout=30)
         if res.status_code == 200:
-            img = Image.open(io.BytesIO(res.content)).convert("RGB").resize((1920, 1080), Image.Resampling.LANCZOS)
-            img.save(output_path, quality=95)
-            print(f"✅ تم توليد الصورة بنجاح عبر Pollinations AI.")
-            return
+            data = res.json()
+            if data.get("photos") and len(data["photos"]) > image_index:
+                # استخدام جودة large2x العالية
+                img_url = data["photos"][image_index]["src"]["large2x"]
+                download_file(img_url, "temp_pexels.jpg")
+                
+                # ضبط الأبعاد إلى 1920x1080
+                img = Image.open("temp_pexels.jpg").convert("RGB")
+                img = img.resize((1920, 1080), Image.Resampling.LANCZOS)
+                img.save(output_path, quality=95)
+                print(f"✅ تم حفظ الصورة بنجاح: {output_path}")
+                return True
+        print(f"تنبيه: لم يتم العثور على نتائج كافية في Pexels ({res.status_code})")
     except Exception as e:
-        print(f"فشل المحرك البديل أيضاً: {e}")
-
-    # 3. الحماية القصوى: منع فشل الأكشن بالكامل
-    print("⚠️ تم إنشاء خلفية لونية احتياطية لضمان عدم تعطل دمج الفيديو...")
-    Image.new("RGB", (1920, 1080), (28, 20, 14)).save(output_path)
+        print(f"خطأ في الاتصال بـ Pexels: {e}")
+    
+    # خلفية احتياطية في حال فشل API بكسلز
+    Image.new("RGB", (1920, 1080), (30, 40, 30)).save(output_path)
+    return False
 
 def main():
     surah_num = int(os.environ.get("SURAH_NUMBER", "1").strip())
-    hf_token = os.environ.get("API_KEY", "").strip()
+    pexels_key = os.environ.get("API_KEY", "").strip()
+
+    if not pexels_key:
+        raise ValueError("لم يتم العثور على مفتاح Pexels في الأسرار (API_KEY)!")
 
     # 1. بيانات السورة
     meta = requests.get(f"https://api.alquran.cloud/v1/surah/{surah_num}").json()
@@ -81,10 +63,11 @@ def main():
     with open("title.txt", "w", encoding="utf-8") as f:
         f.write(f"{raw_name} كاملة بصوت الشيخ محمد صديق المنشاوي")
     with open("desc.txt", "w", encoding="utf-8") as f:
-        f.write(f"تلاوة مباركة لـ {raw_name} بصوت الشيخ محمد صديق المنشاوي رحمة الله عليه.")
+        f.write(f"تلاوة مباركة لـ {raw_name} بصوت القارئ الشيخ محمد صديق المنشاوي رحمة الله عليه.")
 
-    # 2. تحميل الصوت
+    # 2. تحميل التلاوة
     audio_file = "audio.mp3"
+    print("جاري تحميل الصوت...")
     download_file(f"https://server10.mp3quran.net/minsh/{surah_num:03d}.mp3", audio_file)
 
     # 3. تحميل الخط
@@ -92,36 +75,48 @@ def main():
     if not os.path.exists(font_file):
         download_file("https://github.com/google/fonts/raw/main/ofl/amiri/Amiri-Bold.ttf", font_file)
 
-    # 4. توليد خلفية الفيديو التراثية
-    bg_prompt = (
-        "Cinematic ultra detailed shot of cozy traditional Islamic room, open Holy Quran on wooden rehal stand, "
-        "vintage wooden radio, warm lantern on Persian carpet, open wooden mashrabiya window overlooking minaret at sunset, 8k, photorealistic"
-    )
-    generate_ai_image(bg_prompt, hf_token, "bg_video.jpg")
+    # 4. تجهيز خلفية الفيديو عبر Pexels
+    # استخدام صور للمصحف أو مساجد من الداخل
+    get_pexels_image("quran book islam", pexels_key, "bg_video.jpg", image_index=0)
 
-    # 5. توليد الغلاف عبر الـ AI
-    thumb_prompt = (
-        "Luxury Islamic background, dark green and gold arabesque patterns, "
-        "ornate golden calligraphy frame banner in center right with empty space, "
-        "vintage portrait of Egyptian Quran reciter Sheikh Al-Minshawi on the left wearing white turban, 8k, masterpiece"
-    )
-    generate_ai_image(thumb_prompt, hf_token, "thumb_raw.jpg")
+    # 5. تجهيز الغلاف عبر Pexels (صورة مختلفة عن الفيديو)
+    get_pexels_image("islamic architecture mosque", pexels_key, "thumb_raw.jpg", image_index=1)
 
-    # 6. كتابة النص العربي المضبوط فوق الغلاف
-    thumb_img = Image.open("thumb_raw.jpg").convert("RGB")
+    # 6. تصميم الغلاف والكتابة عليه
+    thumb_img = Image.open("thumb_raw.jpg").convert("RGBA")
+    
+    # إضافة طبقة سوداء شفافة لتبريز النص الذهبي وجعله مقروءاً بوضوح
+    overlay = Image.new("RGBA", thumb_img.size, (0, 0, 0, 140))
+    thumb_img = Image.alpha_composite(thumb_img, overlay).convert("RGB")
+    
     draw = ImageDraw.Draw(thumb_img)
-    font = ImageFont.truetype(font_file, 130)
+    title_font = ImageFont.truetype(font_file, 160)
+    sub_font = ImageFont.truetype(font_file, 70)
 
-    bbox = draw.textbbox((0, 0), surah_title, font=font)
+    # حساب المنتصف لكتابة اسم السورة
+    bbox = draw.textbbox((0, 0), surah_title, font=title_font)
     tw = bbox[2] - bbox[0]
-    tx = int(1920 * 0.58) - (tw // 2)
-    ty = int(1080 * 0.40)
+    tx = (1920 - tw) // 2
+    ty = 400
 
-    draw.text((tx + 4, ty + 4), surah_title, font=font, fill=(0, 0, 0))
-    draw.text((tx, ty), surah_title, font=font, fill=(245, 215, 110))
+    # رسم ظل عميق ثم النص الذهبي
+    draw.text((tx + 5, ty + 5), surah_title, font=title_font, fill=(0, 0, 0))
+    draw.text((tx, ty), surah_title, font=title_font, fill=(245, 215, 110))
+
+    # كتابة اسم الشيخ تحتها
+    sheikh_text = fix_arabic_text("الشيخ محمد صديق المنشاوي")
+    s_bbox = draw.textbbox((0, 0), sheikh_text, font=sub_font)
+    s_tw = s_bbox[2] - s_bbox[0]
+    s_tx = (1920 - s_tw) // 2
+    
+    draw.text((s_tx + 3, 650 + 3), sheikh_text, font=sub_font, fill=(0, 0, 0))
+    draw.text((s_tx, 650), sheikh_text, font=sub_font, fill=(255, 255, 255))
+
     thumb_img.save("thumbnail_final.jpg", quality=95)
+    print("✅ تم تصميم الغلاف بنجاح.")
 
     # 7. التصدير بـ FFmpeg
+    print("جاري دمج الفيديو...")
     cmd = [
         "ffmpeg", "-y",
         "-loop", "1",
@@ -137,7 +132,7 @@ def main():
         "output.mp4"
     ]
     subprocess.run(cmd, check=True)
-    print("🚀 تم اكتمال توليد الفيديو والغلاف بنجاح!")
+    print("🚀 تم إنتاج الفيديو من صور Pexels بنجاح!")
 
 if __name__ == "__main__":
     main()
