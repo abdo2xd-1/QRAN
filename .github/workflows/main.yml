@@ -148,7 +148,7 @@ jobs:
     - name: Install System Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y ffmpeg wget curl
+        sudo apt-get install -y ffmpeg wget curl jq
 
     - name: Install Python Dependencies
       run: |
@@ -383,19 +383,26 @@ jobs:
         print("تم إنتاج الفيديو الطويل والعنوان المخصص لكل سورة بنجاح!")
         EOF
 
-    - name: Upload to Streaming Server & Print Links
+    - name: Upload to File.io & Print Direct Link
       run: |
-        echo "جاري رفع الفيديو الطويل..."
+        echo "جاري رفع الفيديو الطويل على سيرفر التحميل السريع..."
         VIDEO_FILE=$(ls video_*.mp4 | head -1)
-        RESPONSE=$(curl -s -F "file=@$VIDEO_FILE" https://tmpfiles.org/api/v1/upload)
         
-        URL=$(echo $RESPONSE | grep -o '"url":"[^"]*"' | head -1 | cut -d'"' -f4)
-        DIRECT_URL=$(echo $URL | sed 's|tmpfiles.org/|tmpfiles.org/dl/|')
+        # رفع الفيديو باستخدام file.io
+        RESPONSE=$(curl -s -F "file=@$VIDEO_FILE" https://file.io)
+        
+        # استخراج رابط التحميل المباشر باستخدام jq
+        DIRECT_URL=$(echo $RESPONSE | jq -r '.link // empty')
 
         echo "===================================================="
-        echo " تم إنتاج الفيديو الطويل بنجاح يا عبده!"
-        echo " رابط المشاهدة المباشر أونلاين هو:"
-        echo " $DIRECT_URL"
+        if [ -n "$DIRECT_URL" ]; then
+          echo " تم رفع الفيديو بنجاح يا عبده!"
+          echo " رابط التحميل والمشاهدة المباشر هو:"
+          echo " $DIRECT_URL"
+        else
+          echo " حدث خطأ أثناء استخراج الرابط، الاستجابة كانت:"
+          echo "$RESPONSE"
+        fi
         echo "===================================================="
         echo " العنوان والوصف المخصص لهذه السورة:"
         cat seo_metadata.txt
