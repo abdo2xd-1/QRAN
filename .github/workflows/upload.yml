@@ -22,7 +22,7 @@ jobs:
 
       - name: Install Python Dependencies
         run: |
-          pip install requests Pillow arabic-reshaper python-bidi
+          pip install requests Pillow arabic-reshaper python-bidi google-genai
 
       - name: Install FFmpeg
         run: |
