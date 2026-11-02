@@ -1,7 +1,13 @@
-name: Generate All Quran Shorts at Once
+name: Generate All Quran Shorts with Image Choice
 
 on:
   workflow_dispatch:
+    inputs:
+      background_image:
+        description: 'اكتب اسم ملف الصورة التي تريد استخدامها (مثلاً: base_room_empty.jpg)'
+        required: true
+        default: 'base_room_empty.jpg'
+        type: string
 
 jobs:
   build-all-videos:
@@ -29,28 +35,27 @@ jobs:
       run: wget -O Amiri-Bold.ttf https://raw.githubusercontent.com/google/fonts/main/ofl/amiri/Amiri-Bold.ttf
 
     - name: Create and Run Python Script for All Surahs
+      env:
+        CHOSEN_BG: ${{ github.event.inputs.background_image }}
       run: |
         python3 - << 'EOF'
         import os
         import subprocess
         import urllib.request
         import json
-        import glob
-        import random
         import arabic_reshaper
         from PIL import Image, ImageDraw, ImageFont
 
         font_path = "Amiri-Bold.ttf" 
+        chosen_background = os.environ.get("CHOSEN_BG", "base_room_empty.jpg")
 
-        # 1. تجهيز خلفيات الصور المتاحة
-        available_backgrounds = glob.glob("*.jpg") + glob.glob("*.png")
-        available_backgrounds = [img for img in available_backgrounds if img != "Amiri-Bold.ttf"]
-
-        if not available_backgrounds:
-            print("خطأ: يرجى رفع صورة خلفية واحدة على الأقل في المستودع!")
+        if not os.path.exists(chosen_background):
+            print(f"خطأ: الصورة المحددة '{chosen_background}' غير موجودة في المستودع! تأكد من كتابة الاسم صحيحاً.")
             exit(1)
 
-        # 2. جلب قائمة كل سور القرآن الكريم من API موقع mp3quran الرسمي
+        print(f"تم اختيار الخلفية: {chosen_background}")
+
+        # جلب قائمة كل سور القرآن الكريم من API موقع mp3quran الرسمي
         api_url = "https://www.mp3quran.net/api/v3/suwar"
         req = urllib.request.Request(api_url, headers={'User-Agent': 'Mozilla/5.0'})
         
@@ -65,7 +70,6 @@ jobs:
 
         print(f"تم العثور على {len(suwar_list)} سورة. جاري بدء الإنتاج الشامل...")
 
-        # 3. حلقة تكرارية لإنتاج فيديوهات المصحف كامل للشيخ المنشاوي
         for s in suwar_list:
             surah_id = str(s['id']).zfill(3)
             surah_name = s['name']
@@ -77,16 +81,12 @@ jobs:
 
             print(f"\n--- جاري معالجة: {surah_name} (رقم {surah_id}) ---")
 
-            # تحميل ملف الصوت لو مش موجود
             if not os.path.exists(local_filename):
                 try:
                     urllib.request.urlretrieve(audio_url, local_filename)
                 except Exception as e:
                     print(f"فشل تحميل صوت {surah_name}: {e}")
                     continue
-
-            # اختيار خلفية عشوائية لكل سورة لزيادة التنوع
-            chosen_background = random.choice(available_backgrounds)
 
             # تنسيق النص العربي وعكسه يدوياً
             text_lines = ["الشيخ محمد صديق المنشاوي", surah_name]
