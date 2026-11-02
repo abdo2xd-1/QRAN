@@ -1,12 +1,10 @@
-name: Automated Quran Shorts Pipeline
+name: Generate Quran Shorts
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 */2 * * *' # يعمل أوتوماتيك كل ساعتين
 
 jobs:
-  build-and-release:
+  build-videos:
     runs-on: ubuntu-latest
 
     steps:
@@ -34,10 +32,9 @@ jobs:
       run: |
         python3 - << 'EOF'
         import os
+        import glob
         import subprocess
         import urllib.request
-        import json
-        import datetime
         import arabic_reshaper
         from PIL import Image, ImageDraw, ImageFont
 
@@ -45,91 +42,57 @@ jobs:
         base_image = "base_room_empty.jpg"
 
         if not os.path.exists(base_image):
-            print("خطأ: تأكد من رفع صورة الخلفية base_room_empty.jpg")
+            print("خطأ: تأكد من رفع صورة الخلفية base_room_empty.jpg في المستودع")
             exit(1)
 
-        # التحقق من شرط يوم الخميس الساعة 8 مساءً لتنزيل سورة الكهف تلقائياً
-        now_utc = datetime.datetime.utcnow()
-        is_thursday_8pm = (now_utc.weekday() == 3 and now_utc.hour == 18)
+        # قائمة السور المراد تحميلها
+        surahs = {
+            "001": "سورة الفاتحة",
+            "112": "سورة الإخلاص",
+            "113": "سورة الفلق",
+            "114": "سورة الناس"
+        }
+        base_url = "https://server10.mp3quran.net/minsh/"
 
-        target_name = None
+        for num, name in surahs.items():
+            audio_url = f"{base_url}{num}.mp3"
+            local_filename = f"{name}.mp3"
+            if not os.path.exists(local_filename):
+                print(f"جاري تحميل {name}...")
+                urllib.request.urlretrieve(audio_url, local_filename)
 
-        if is_thursday_8pm:
-            target_name = "الكهف"
-            print("معدل خاص: اليوم الخميس الساعة 8 مساءً، سيتم إنتاج سورة الكهف!")
-        elif os.path.exists("surahs.txt"):
-            with open("surahs.txt", "r", encoding="utf-8") as f:
-                lines = [line.strip() for line in f if line.strip()]
-                if lines:
-                    target_name = lines[0] # قراءة أول سورة بالاسم
-                    # حذفها من الملف لكي لا تكرر في الدورة القادمة
-                    with open("surahs.txt", "w", encoding="utf-8") as fw:
-                        fw.write("\n".join(lines[1:]))
+        audio_files = glob.glob("*.mp3")
+        for audio_file in audio_files:
+            surah_name = os.path.splitext(audio_file)[0]
+            output_image = f"cover_{surah_name}.jpg"
+            final_video = f"video_{surah_name}.mp4"
+            
+            # 1. إصلاح النص العربي بشكل جذري (سطر بسطر وعكسه يدوياً)
+            text_lines = ["الشيخ محمد صديق المنشاوي", surah_name]
+            final_text = ""
+            for line in text_lines:
+                reshaped = arabic_reshaper.reshape(line)
+                reversed_line = reshaped[::-1] 
+                final_text += reversed_line + "\n"
 
-        if not target_name:
-            print("لا توجد سور جديدة في الملف للتحميل حالياً.")
-            exit(0)
+            # 2. الكتابة على الصورة مع ظل أسود لتوضيح القراءة
+            image = Image.open(base_image)
+            draw = ImageDraw.Draw(image)
+            font = ImageFont.truetype(font_path, 80)
+            
+            draw.multiline_text((image.width/2 + 3, image.height/2 + 3), final_text.strip(), font=font, fill="black", anchor="mm", align="center")
+            draw.multiline_text((image.width/2, image.height/2), final_text.strip(), font=font, fill="#F5DEB3", anchor="mm", align="center")
+            image.save(output_image)
 
-        # جلب قائمة سور القرآن الكريم من API الرسمي لموقع mp3quran لمعرفة رقم السورة بالاسم
-        api_url = "https://www.mp3quran.net/api/v3/suwar"
-        req = urllib.request.Request(api_url, headers={'User-Agent': 'Mozilla/5.0'})
-        
-        surah_number = None
-        full_surah_name = f"سورة {target_name}"
-
-        try:
-            with urllib.request.urlopen(req) as response:
-                data = json.loads(response.read().decode('utf-8'))
-                for s in data.get('suwar', []):
-                    # البحث بالاسم في القائمة
-                    if target_name in s['name']:
-                        surah_number = str(s['id']).zfill(3)
-                        full_surah_name = s['name']
-                        break
-        except Exception as e:
-            print(f"خطأ أثناء الاتصال بقاعدة البيانات: {e}")
-            exit(1)
-
-        if not surah_number:
-            print(f"لم يتم العثور على سورة '{target_name}' في قاعدة البيانات.")
-            exit(1)
-
-        # تحميل الصوت للشيخ المنشاوي
-        audio_url = f"https://server10.mp3quran.net/minsh/{surah_number}.mp3"
-        local_filename = f"{full_surah_name}.mp3"
-
-        print(f"جاري تحميل {full_surah_name} (برقم {surah_number})...")
-        urllib.request.urlretrieve(audio_url, local_filename)
-
-        output_image = f"cover_{full_surah_name}.jpg"
-        final_video = f"video_{full_surah_name}.mp4"
-
-        # تنسيق النص العربي وعكسه يدوياً لضمان سلامة الحروف
-        text_lines = ["الشيخ محمد صديق المنشاوي", full_surah_name]
-        final_text = ""
-        for line in text_lines:
-            reshaped = arabic_reshaper.reshape(line)
-            reversed_line = reshaped[::-1] 
-            final_text += reversed_line + "\n"
-
-        # كتابة النص على الخلفية مع ظل أسود وضوح تام
-        image = Image.open(base_image)
-        draw = ImageDraw.Draw(image)
-        font = ImageFont.truetype(font_path, 80)
-        
-        draw.multiline_text((image.width/2 + 3, image.height/2 + 3), final_text.strip(), font=font, fill="black", anchor="mm", align="center")
-        draw.multiline_text((image.width/2, image.height/2), final_text.strip(), font=font, fill="#F5DEB3", anchor="mm", align="center")
-        image.save(output_image)
-
-        # دمج الفيديو بتأثير شاشة التلفزيون القديمة والشوشرة
-        ffmpeg_cmd = [
-            "ffmpeg", "-loop", "1", "-i", output_image, "-i", local_filename,
-            "-vf", "noise=alls=30:allf=t+u,eq=contrast=1.1:brightness=-0.05:saturation=0.5,drawgrid=width=iw:height=6:thickness=2:color=black@0.3",
-            "-c:v", "libx264", "-tune", "stillimage", "-c:a", "aac", "-b:a", "192k",
-            "-pix_fmt", "yuv420p", "-shortest", "-y", final_video
-        ]
-        subprocess.run(ffmpeg_cmd)
-        print(f"تم بنجاح إنشاء فيديو: {final_video}")
+            # 3. تأثير التلفزيون القديم القوي (حبيبات + خطوط عرضية + ألوان باهتة)
+            ffmpeg_cmd = [
+                "ffmpeg", "-loop", "1", "-i", output_image, "-i", audio_file,
+                "-vf", "noise=alls=30:allf=t+u,eq=contrast=1.1:brightness=-0.05:saturation=0.5,drawgrid=width=iw:height=6:thickness=2:color=black@0.3",
+                "-c:v", "libx264", "-tune", "stillimage", "-c:a", "aac", "-b:a", "192k",
+                "-pix_fmt", "yuv420p", "-shortest", "-y", final_video
+            ]
+            subprocess.run(ffmpeg_cmd)
+            print(f"تم بنجاح إنشاء فيديو: {final_video}")
         EOF
 
     - name: Upload Generated Videos
