@@ -148,7 +148,7 @@ jobs:
     - name: Install System Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y ffmpeg wget curl jq
+        sudo apt-get install -y ffmpeg wget
 
     - name: Install Python Dependencies
       run: |
@@ -380,30 +380,17 @@ jobs:
         with open("seo_metadata.txt", "w", encoding="utf-8") as f:
             f.write(f"=== TITLE ===\n{video_title}\n\n=== DESCRIPTION ===\n{video_description}")
 
-        print("تم إنتاج الفيديو الطويل والعنوان المخصص لكل سورة بنجاح!")
+        print("تم إنتاج الفيديو الطويل والعنوان المخصص بنجاح!")
         EOF
 
-    - name: Upload to File.io & Print Direct Link
-      run: |
-        echo "جاري رفع الفيديو الطويل على سيرفر التحميل السريع..."
-        VIDEO_FILE=$(ls video_*.mp4 | head -1)
-        
-        # رفع الفيديو باستخدام file.io
-        RESPONSE=$(curl -s -F "file=@$VIDEO_FILE" https://file.io)
-        
-        # استخراج رابط التحميل المباشر باستخدام jq
-        DIRECT_URL=$(echo $RESPONSE | jq -r '.link // empty')
+    - name: Upload Video as Artifact (Safe & Fast)
+      uses: actions/upload-artifact@v4
+      with:
+        name: Long-Quran-Video
+        path: video_*.mp4
 
-        echo "===================================================="
-        if [ -n "$DIRECT_URL" ]; then
-          echo " تم رفع الفيديو بنجاح يا عبده!"
-          echo " رابط التحميل والمشاهدة المباشر هو:"
-          echo " $DIRECT_URL"
-        else
-          echo " حدث خطأ أثناء استخراج الرابط، الاستجابة كانت:"
-          echo "$RESPONSE"
-        fi
-        echo "===================================================="
-        echo " العنوان والوصف المخصص لهذه السورة:"
-        cat seo_metadata.txt
-        echo "===================================================="
+    - name: Upload Metadata as Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Video-SEO-Metadata
+        path: seo_metadata.txt
