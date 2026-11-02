@@ -1,10 +1,10 @@
-name: Generate Any Quran Short (Full Surahs List)
+name: Generate Specific Quran Short
 
 on:
   workflow_dispatch:
     inputs:
       surah_name:
-        description: 'اختر السورة المطلوبة لإنتاج الفيديو الخاص بها'
+        description: 'اختر السورة المطلوبة لإنتاج الفيديو'
         required: true
         default: 'سورة الكهف'
         type: choice
@@ -61,7 +61,7 @@ on:
           - سورة ق
           - سورة الذاريات
           - سورة الطور
-          - سورة النجم
+          - sورة النجم
           - سورة القمر
           - سورة الرحمن
           - سورة الواقعة
@@ -144,12 +144,12 @@ jobs:
 
     - name: Install Python Dependencies
       run: |
-        pip install Pillow arabic-reshaper
+        pip install Pillow arabic-reshaper python-bidi
 
     - name: Download Arabic Font
       run: wget -O Amiri-Bold.ttf https://raw.githubusercontent.com/google/fonts/main/ofl/amiri/Amiri-Bold.ttf
 
-    - name: Create and Run Python Script for Selected Surah
+    - name: Create and Run Python Script
       env:
         SELECTED_SURAH: ${{ github.event.inputs.surah_name }}
       run: |
@@ -161,11 +161,11 @@ jobs:
         import glob
         import random
         import arabic_reshaper
+        from bidi.algorithm import get_display
         from PIL import Image, ImageDraw, ImageFont
 
         font_path = "Amiri-Bold.ttf" 
         full_surah_name = os.environ.get("SELECTED_SURAH", "سورة الكهف")
-        # استخراج اسم السورة بدون كلمة "سورة" للبحث السليم
         target_name = full_surah_name.replace("سورة", "").strip()
 
         # 1. اختيار صورة خلفية عشوائية من الصور المرفوعة
@@ -211,24 +211,21 @@ jobs:
         output_image = f"cover_{surah_number}.jpg"
         final_video = f"video_{surah_number}.mp4"
 
-        # 4. تنسيق النص العربي وعكسه يدوياً
-        text_lines = ["الشيخ محمد صديق المنشاوي", full_surah_name]
-        final_text = ""
-        for line in text_lines:
-            reshaped = arabic_reshaper.reshape(line)
-            reversed_line = reshaped[::-1] 
-            final_text += reversed_line + "\n"
+        # 4. معالجة النص العربي بشكل سليم لمنع انقلاب الحروف
+        text_to_write = f"الشيخ محمد صديق المنشاوي\n{full_surah_name}"
+        reshaped_text = arabic_reshaper.reshape(text_to_write)
+        bidi_text = get_display(reshaped_text)
 
         # 5. الكتابة على الخلفية المختارة مع ظل أسود للوضوح
         image = Image.open(chosen_background)
         draw = ImageDraw.Draw(image)
         font = ImageFont.truetype(font_path, 80)
         
-        draw.multiline_text((image.width/2 + 3, image.height/2 + 3), final_text.strip(), font=font, fill="black", anchor="mm", align="center")
-        draw.multiline_text((image.width/2, image.height/2), final_text.strip(), font=font, fill="#F5DEB3", anchor="mm", align="center")
+        draw.multiline_text((image.width/2 + 3, image.height/2 + 3), bidi_text, font=font, fill="black", anchor="mm", align="center")
+        draw.multiline_text((image.width/2, image.height/2), bidi_text, font=font, fill="#F5DEB3", anchor="mm", align="center")
         image.save(output_image)
 
-        # 6. دمج الفيديو بأعلى جودة وتأثير شاشة التلفزيون القديمة
+        # 6. دمج الفيديو بأعلى جودة وتأثير شاشة التلفزيون القديمة والشوشرة
         ffmpeg_cmd = [
             "ffmpeg", "-loop", "1", "-i", output_image, "-i", local_filename,
             "-vf", "noise=alls=30:allf=t+u,eq=contrast=1.1:brightness=-0.05:saturation=0.5,drawgrid=width=iw:height=6:thickness=2:color=black@0.3",
