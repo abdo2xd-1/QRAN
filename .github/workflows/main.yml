@@ -1,4 +1,4 @@
-name: Generate Specific Quran Short
+name: Generate Quran Short with Direct Streaming Link
 
 on:
   workflow_dispatch:
@@ -61,7 +61,7 @@ on:
           - سورة ق
           - سورة الذاريات
           - سورة الطور
-          - sورة النجم
+          - سورة النجم
           - سورة القمر
           - سورة الرحمن
           - سورة الواقعة
@@ -140,7 +140,7 @@ jobs:
     - name: Install System Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y ffmpeg wget
+        sudo apt-get install -y ffmpeg wget curl
 
     - name: Install Python Dependencies
       run: |
@@ -236,8 +236,17 @@ jobs:
         print(f"تم بنجاح إنشاء فيديو: {final_video}")
         EOF
 
-    - name: Upload Generated Video
-      uses: actions/upload-artifact@v4
-      with:
-        name: Selected-Surah-Video
-        path: video_*.mp4
+    - name: Upload to Streaming Server & Print Direct Link
+      run: |
+        echo "جاري رفع الفيديو للحصول على رابط المشاهدة المباشر..."
+        VIDEO_FILE=$(ls video_*.mp4 | head -1)
+        RESPONSE=$(curl -s -F "file=@$VIDEO_FILE" https://tmpfiles.org/api/v1/upload)
+        
+        URL=$(echo $RESPONSE | grep -o '"url":"[^"]*"' | head -1 | cut -d'"' -f4)
+        DIRECT_URL=$(echo $URL | sed 's|tmpfiles.org/|tmpfiles.org/dl/|')
+
+        echo "===================================================="
+        echo " تم رفع الفيديو بنجاح يا عبده!"
+        echo " رابط المشاهدة والتشغيل المباشر أونلاين هو:"
+        echo " $DIRECT_URL"
+        echo "===================================================="
