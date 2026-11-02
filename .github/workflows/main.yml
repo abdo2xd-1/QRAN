@@ -1,131 +1,33 @@
-name: Generate Quran Short with Direct Streaming Link
+name: Ultimate SEO Quran Shorts Pipeline
 
 on:
   workflow_dispatch:
     inputs:
+      sheikh_choice:
+        description: 'اختر الشيخ القارئ'
+        required: true
+        default: 'المنشاوي'
+        type: choice
+        options:
+          - المنشاوي
+          - الدوسري
       surah_name:
-        description: 'اختر السورة المطلوبة لإنتاج الفيديو'
+        description: 'اختر السورة المطلوبة'
         required: true
         default: 'سورة الكهف'
         type: choice
         options:
           - سورة الفاتحة
           - سورة البقرة
-          - سورة آل عمران
-          - سورة النساء
-          - سورة المائدة
-          - سورة الأنعام
-          - سورة الأعراف
-          - سورة الأنفال
-          - سورة التوبة
-          - سورة يونس
-          - سورة هود
-          - سورة يوسف
-          - سورة الرعد
-          - سورة إبراهيم
-          - سورة الحجر
-          - سورة النحل
-          - سورة الإسراء
           - سورة الكهف
-          - سورة مريم
-          - سورة طه
-          - سورة الأنبياء
-          - سورة الحج
-          - سورة المؤمنون
-          - سورة النور
-          - سورة الفرقان
-          - سورة الشعراء
-          - سورة النمل
-          - سورة القصص
-          - سورة العنكبوت
-          - سورة الروم
-          - سورة لقمان
-          - سورة السجدة
-          - سورة الأحزاب
-          - سورة سبأ
-          - سورة فاطر
           - سورة يس
-          - سورة الصافات
-          - سورة ص
-          - سورة الزمر
-          - سورة غافر
-          - سورة فصلت
-          - سورة الشورى
-          - سورة الزخرف
-          - سورة الدخان
-          - سورة الجاثية
-          - سورة الأحقاف
-          - سورة محمد
-          - سورة الفتح
-          - سورة الحجرات
-          - سورة ق
-          - سورة الذاريات
-          - سورة الطور
-          - سورة النجم
-          - سورة القمر
-          - سورة الرحمن
-          - سورة الواقعة
-          - سورة الحديد
-          - سورة المجادلة
-          - سورة الحشر
-          - سورة الممتحنة
-          - سورة الصف
-          - سورة الجمعة
-          - سورة المنافقون
-          - سورة التغابن
-          - سورة الطلاق
-          - سورة التحريم
           - سورة الملك
-          - سورة القلم
-          - سورة الحاقة
-          - سورة المعارج
-          - سورة نوح
-          - سورة الجن
-          - سورة المزمل
-          - سورة المدثر
-          - سورة القيامة
-          - سورة الإنسان
-          - سورة المرسلات
-          - سورة النبأ
-          - سورة النازعات
-          - سورة عبس
-          - سورة التكوير
-          - سورة الانفطار
-          - سورة المطففين
-          - سورة الانشقاق
-          - سورة البروج
-          - سورة الطارق
-          - سورة الأعلى
-          - سورة الغاشية
-          - سورة الفجر
-          - سورة البلد
-          - سورة الشمس
-          - سورة الليل
-          - سورة الضحى
-          - سورة الشرح
-          - سورة التين
-          - سورة العلق
-          - سورة القدر
-          - سورة البينة
-          - سورة الزلزلة
-          - سورة العاديات
-          - سورة القارعة
-          - سورة التكاثر
-          - سورة العصر
-          - سورة الهمزة
-          - سورة الفيل
-          - سورة قريش
-          - سورة الماعون
-          - سورة الكوثر
-          - سورة الكافرون
-          - سورة النصر
-          - سورة المسد
           - سورة الإخلاص
           - سورة الفلق
           - سورة الناس
 
 jobs:
-  build-single-video:
+  build-seo-video:
     runs-on: ubuntu-latest
 
     steps:
@@ -149,8 +51,9 @@ jobs:
     - name: Download Arabic Font
       run: wget -O Amiri-Bold.ttf https://raw.githubusercontent.com/google/fonts/main/ofl/amiri/Amiri-Bold.ttf
 
-    - name: Create and Run Python Script
+    - name: Create and Run Python Script with SEO
       env:
+        SELECTED_SHEIKH: ${{ github.event.inputs.sheikh_choice }}
         SELECTED_SURAH: ${{ github.event.inputs.surah_name }}
       run: |
         python3 - << 'EOF'
@@ -158,33 +61,35 @@ jobs:
         import subprocess
         import urllib.request
         import json
-        import glob
-        import random
         import arabic_reshaper
         from bidi.algorithm import get_display
         from PIL import Image, ImageDraw, ImageFont
 
         font_path = "Amiri-Bold.ttf" 
+        sheikh = os.environ.get("SELECTED_SHEIKH", "المنشاوي")
         full_surah_name = os.environ.get("SELECTED_SURAH", "سورة الكهف")
         target_name = full_surah_name.replace("سورة", "").strip()
 
-        # 1. اختيار صورة خلفية عشوائية من الصور المرفوعة
-        available_backgrounds = glob.glob("*.jpg") + glob.glob("*.png")
-        available_backgrounds = [img for img in available_backgrounds if img != "Amiri-Bold.ttf"]
+        bg_image_path = "base_room_empty.jpg" # الخلفية الإسلامية الثابتة
 
-        if not available_backgrounds:
-            print("خطأ: يرجى رفع صورة خلفية واحدة على الأقل في المستودع!")
+        if not os.path.exists(bg_image_path):
+            print("خطأ: يرجى رفع صورة الخلفية base_room_empty.jpg في المستودع!")
             exit(1)
 
-        chosen_background = random.choice(available_backgrounds)
-        print(f"تم اختيار الخلفية: {chosen_background}")
+        if sheikh == "الدوسري":
+            server_folder = "dsri"
+            sheikh_name_ar = "الشيخ ياسر بن راشد الدوسري"
+            portrait_path = "dosri.png"
+        else:
+            server_folder = "minsh"
+            sheikh_name_ar = "الشيخ محمد صديق المنشاوي"
+            portrait_path = "minshawi.png"
 
-        # 2. جلب رقم السورة الصحيح من API موقع mp3quran بالاسم
+        # 1. جلب رقم السورة من API موقع mp3quran
         api_url = "https://www.mp3quran.net/api/v3/suwar"
         req = urllib.request.Request(api_url, headers={'User-Agent': 'Mozilla/5.0'})
         
         surah_number = None
-
         try:
             with urllib.request.urlopen(req) as response:
                 data = json.loads(response.read().decode('utf-8'))
@@ -198,45 +103,62 @@ jobs:
             exit(1)
 
         if not surah_number:
-            print(f"لم يتم العثور على سورة '{target_name}' في قاعدة البيانات.")
+            print(f"لم يتم العثور على سورة '{target_name}'.")
             exit(1)
 
-        # 3. تحميل الصوت للشيخ المنشاوي
-        audio_url = f"https://server10.mp3quran.net/minsh/{surah_number}.mp3"
+        # 2. تحميل الصوت
+        audio_url = f"https://server10.mp3quran.net/{server_folder}/{surah_number}.mp3"
         local_filename = f"{full_surah_name}.mp3"
-
-        print(f"جاري تحميل {full_surah_name} (رقم {surah_number})...")
         urllib.request.urlretrieve(audio_url, local_filename)
 
-        output_image = f"cover_{surah_number}.jpg"
+        image_filename = f"image_{surah_number}.jpg"
         final_video = f"video_{surah_number}.mp4"
 
-        # 4. معالجة النص العربي بشكل سليم لمنع انقلاب الحروف
-        text_to_write = f"الشيخ محمد صديق المنشاوي\n{full_surah_name}"
-        reshaped_text = arabic_reshaper.reshape(text_to_write)
-        bidi_text = get_display(reshaped_text)
+        # 3. تصميم الصورة (التي ستكون هي الفيديو والصورة المصغرة في نفس الوقت)
+        base_img = Image.open(bg_image_path).convert("RGBA")
 
-        # 5. الكتابة على الخلفية المختارة مع ظل أسود للوضوح
-        image = Image.open(chosen_background)
-        draw = ImageDraw.Draw(image)
-        font = ImageFont.truetype(font_path, 80)
-        
-        draw.multiline_text((image.width/2 + 3, image.height/2 + 3), bidi_text, font=font, fill="black", anchor="mm", align="center")
-        draw.multiline_text((image.width/2, image.height/2), bidi_text, font=font, fill="#F5DEB3", anchor="mm", align="center")
-        image.save(output_image)
+        if os.path.exists(portrait_path):
+            portrait = Image.open(portrait_path).convert("RGBA")
+            portrait = portrait.resize((500, int(portrait.height * (500 / portrait.width))))
+            base_img.paste(portrait, (40, base_img.height - portrait.height - 20), portrait)
 
-        # 6. دمج الفيديو بأعلى جودة وتأثير شاشة التلفزيون القديمة والشوشرة
+        draw = ImageDraw.Draw(base_img)
+        font_title = ImageFont.truetype(font_path, 110)
+        font_sub = ImageFont.truetype(font_path, 45)
+
+        title_text = get_display(arabic_reshaper.reshape(f"سورة {full_surah_name}"))
+        sheikh_text = get_display(arabic_reshaper.reshape(sheikh_name_ar))
+
+        # الكتابة بخط ذهبي فخم
+        draw.text((703, 103), title_text, font=font_title, fill="black")
+        draw.text((700, 100), title_text, font=font_title, fill="#FFD700")
+
+        draw.text((703, 353), sheikh_text, font=font_sub, fill="black")
+        draw.text((700, 350), sheikh_text, font=font_sub, fill="#F5DEB3")
+
+        final_image = base_img.convert("RGB")
+        final_image.save(image_filename)
+
+        # 4. دمج الفيديو بأعلى جودة مع تأثير التلفزيون القديم والشوشرة لتصبح نفس الصورة هي الفيديو
         ffmpeg_cmd = [
-            "ffmpeg", "-loop", "1", "-i", output_image, "-i", local_filename,
-            "-vf", "noise=alls=30:allf=t+u,eq=contrast=1.1:brightness=-0.05:saturation=0.5,drawgrid=width=iw:height=6:thickness=2:color=black@0.3",
+            "ffmpeg", "-loop", "1", "-i", image_filename, "-i", local_filename,
+            "-vf", "noise=alls=25:allf=t+u,eq=contrast=1.1:brightness=-0.05:saturation=0.6,drawgrid=width=iw:height=6:thickness=2:color=black@0.3",
             "-c:v", "libx264", "-tune", "stillimage", "-c:a", "aac", "-b:a", "192k",
             "-pix_fmt", "yuv420p", "-shortest", "-y", final_video
         ]
         subprocess.run(ffmpeg_cmd)
-        print(f"تم بنجاح إنشاء فيديو: {final_video}")
+
+        # 5. توليد محتوى SEO احترافي (عنوان، وصف، كلمات مفتاحية لزيادة المشاهدات)
+        seo_title = f"سورة {full_surah_name} بصوت {sheikh_name_ar} #shorts"
+        seo_description = f"استمع إلى تلاوة خاشعة لـ سورة {full_surah_name} بصوت القارئ {sheikh_name_ar}. تلاوة عطرة تريح القلب وتطمئن النفوس.\n\n#القرآن_الكريم #{sheikh} #{full_surah_name} #shorts #quran"
+        
+        with open("seo_metadata.txt", "w", encoding="utf-8") as f:
+            f.write(f"=== SEO TITLE ===\n{seo_title}\n\n=== SEO DESCRIPTION & TAGS ===\n{seo_description}")
+
+        print("تم بنجاح إنتاج الفيديو وملفات الـ SEO!")
         EOF
 
-    - name: Upload to Streaming Server & Print Direct Link
+    - name: Upload to Streaming Server & Print Links
       run: |
         echo "جاري رفع الفيديو للحصول على رابط المشاهدة المباشر..."
         VIDEO_FILE=$(ls video_*.mp4 | head -1)
@@ -246,7 +168,10 @@ jobs:
         DIRECT_URL=$(echo $URL | sed 's|tmpfiles.org/|tmpfiles.org/dl/|')
 
         echo "===================================================="
-        echo " تم رفع الفيديو بنجاح يا عبده!"
-        echo " رابط المشاهدة والتشغيل المباشر أونلاين هو:"
+        echo " تم إنتاج الفيديو بتصميم الصورة الأصلية وتأثير التلفزيون بنجاح!"
+        echo " رابط المشاهدة المباشر أونلاين هو:"
         echo " $DIRECT_URL"
+        echo "===================================================="
+        echo " تفاصيل الـ SEO المقترحة لفيديو الشورتز:"
+        cat seo_metadata.txt
         echo "===================================================="
