@@ -1,46 +1,38 @@
-name: Quran Video Auto Publisher
+name: Generate Quran Shorts
 
 on:
-  workflow_dispatch:
-    inputs:
-      surah_number:
-        description: 'رقم السورة من 1 إلى 114'
-        required: true
-        default: '1'
+  workflow_dispatch: # يتيح لك تشغيل الكود يدوياً بزر "Run workflow"
+  push:
+    paths:
+      - '*.mp3' # يعمل تلقائياً عند رفع أي ملف صوتي جديد
 
 jobs:
-  build-and-publish:
+  build-videos:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+    - name: Checkout Repository
+      uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
 
-      - name: Install Python Dependencies
-        run: |
-          pip install requests Pillow arabic-reshaper python-bidi
+    - name: Install System Dependencies (FFmpeg)
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg
 
-      - name: Install FFmpeg
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
+    - name: Install Python Dependencies
+      run: |
+        pip install Pillow arabic-reshaper python-bidi
 
-      - name: Generate Quran Video
-        env:
-          SURAH_NUMBER: ${{ github.event.inputs.surah_number }}
-        run: python pipeline.py
+    - name: Run Video Generation Script
+      run: python main.py
 
-      - name: Upload Video and Assets to GitHub Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: Quran-Video-Output
-          path: |
-            output.mp4
-            thumbnail_final.jpg
-            title.txt
-            desc.txt
-          retention-days: 7
+    - name: Upload Generated Videos
+      uses: actions/upload-artifact@v4
+      with:
+        name: Final-Videos
+        path: video_*.mp4
