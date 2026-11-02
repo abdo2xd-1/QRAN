@@ -1,16 +1,26 @@
-name: Generate All Quran Shorts with Image Choice
+name: Generate Specific Quran Short
 
 on:
   workflow_dispatch:
     inputs:
-      background_image:
-        description: 'اكتب اسم ملف الصورة التي تريد استخدامها (مثلاً: base_room_empty.jpg)'
+      surah_name:
+        description: 'اختر أو اكتب اسم السورة المطلوبة (مثلاً: الكهف، الفاتحة، الإخلاص...)'
         required: true
-        default: 'base_room_empty.jpg'
-        type: string
+        default: 'الكهف'
+        type: choice
+        options:
+          - الفاتحة
+          - البقرة
+          - آل عمران
+          - الكهف
+          - يس
+          - الملك
+          - الإخلاص
+          - الفلق
+          - الناس
 
 jobs:
-  build-all-videos:
+  build-single-video:
     runs-on: ubuntu-latest
 
     steps:
@@ -34,92 +44,97 @@ jobs:
     - name: Download Arabic Font
       run: wget -O Amiri-Bold.ttf https://raw.githubusercontent.com/google/fonts/main/ofl/amiri/Amiri-Bold.ttf
 
-    - name: Create and Run Python Script for All Surahs
+    - name: Create and Run Python Script for Selected Surah
       env:
-        CHOSEN_BG: ${{ github.event.inputs.background_image }}
+        SELECTED_SURAH: ${{ github.event.inputs.surah_name }}
       run: |
         python3 - << 'EOF'
         import os
         import subprocess
         import urllib.request
         import json
+        import glob
+        import random
         import arabic_reshaper
         from PIL import Image, ImageDraw, ImageFont
 
         font_path = "Amiri-Bold.ttf" 
-        chosen_background = os.environ.get("CHOSEN_BG", "base_room_empty.jpg")
+        target_name = os.environ.get("SELECTED_SURAH", "الكهف")
 
-        if not os.path.exists(chosen_background):
-            print(f"خطأ: الصورة المحددة '{chosen_background}' غير موجودة في المستودع! تأكد من كتابة الاسم صحيحاً.")
+        # 1. اختيار صورة خلفية عشوائية من الصور المرفوعة
+        available_backgrounds = glob.glob("*.jpg") + glob.glob("*.png")
+        available_backgrounds = [img for img in available_backgrounds if img != "Amiri-Bold.ttf"]
+
+        if not available_backgrounds:
+            print("خطأ: يرجى رفع صورة خلفية واحدة على الأقل في المستودع!")
             exit(1)
 
+        chosen_background = random.choice(available_backgrounds)
         print(f"تم اختيار الخلفية: {chosen_background}")
 
-        # جلب قائمة كل سور القرآن الكريم من API موقع mp3quran الرسمي
+        # 2. جلب رقم السورة الصحيح من API موقع mp3quran بالاسم المختار
         api_url = "https://www.mp3quran.net/api/v3/suwar"
         req = urllib.request.Request(api_url, headers={'User-Agent': 'Mozilla/5.0'})
         
-        suwar_list = []
+        surah_number = None
+        full_surah_name = f"سورة {target_name}"
+
         try:
             with urllib.request.urlopen(req) as response:
                 data = json.loads(response.read().decode('utf-8'))
-                suwar_list = data.get('suwar', [])
+                for s in data.get('suwar', []):
+                    if target_name in s['name']:
+                        surah_number = str(s['id']).zfill(3)
+                        full_surah_name = s['name']
+                        break
         except Exception as e:
             print(f"خطأ في الاتصال بقاعدة بيانات السور: {e}")
             exit(1)
 
-        print(f"تم العثور على {len(suwar_list)} سورة. جاري بدء الإنتاج الشامل...")
+        if not surah_number:
+            print(f"لم يتم العثور على سورة '{target_name}' في قاعدة البيانات.")
+            exit(1)
 
-        for s in suwar_list:
-            surah_id = str(s['id']).zfill(3)
-            surah_name = s['name']
-            
-            audio_url = f"https://server10.mp3quran.net/minsh/{surah_id}.mp3"
-            local_filename = f"{surah_name}.mp3"
-            output_image = f"cover_{surah_id}.jpg"
-            final_video = f"video_{surah_id}.mp4"
+        # 3. تحميل الصوت للشيخ المنشاوي
+        audio_url = f"https://server10.mp3quran.net/minsh/{surah_number}.mp3"
+        local_filename = f"{full_surah_name}.mp3"
 
-            print(f"\n--- جاري معالجة: {surah_name} (رقم {surah_id}) ---")
+        print(f"جاري تحميل {full_surah_name} (رقم {surah_number})...")
+        urllib.request.urlretrieve(audio_url, local_filename)
 
-            if not os.path.exists(local_filename):
-                try:
-                    urllib.request.urlretrieve(audio_url, local_filename)
-                except Exception as e:
-                    print(f"فشل تحميل صوت {surah_name}: {e}")
-                    continue
+        output_image = f"cover_{surah_number}.jpg"
+        final_video = f"video_{surah_number}.mp4"
 
-            # تنسيق النص العربي وعكسه يدوياً
-            text_lines = ["الشيخ محمد صديق المنشاوي", surah_name]
-            final_text = ""
-            for line in text_lines:
-                reshaped = arabic_reshaper.reshape(line)
-                reversed_line = reshaped[::-1] 
-                final_text += reversed_line + "\n"
+        # 4. تنسيق النص العربي وعكسه يدوياً
+        text_lines = ["الشيخ محمد صديق المنشاوي", full_surah_name]
+        final_text = ""
+        for line in text_lines:
+            reshaped = arabic_reshaper.reshape(line)
+            reversed_line = reshaped[::-1] 
+            final_text += reversed_line + "\n"
 
-            # رسم النص على الخلفية المختارة مع ظل أسود للوضوح
-            image = Image.open(chosen_background)
-            draw = ImageDraw.Draw(image)
-            font = ImageFont.truetype(font_path, 80)
-            
-            draw.multiline_text((image.width/2 + 3, image.height/2 + 3), final_text.strip(), font=font, fill="black", anchor="mm", align="center")
-            draw.multiline_text((image.width/2, image.height/2), final_text.strip(), font=font, fill="#F5DEB3", anchor="mm", align="center")
-            image.save(output_image)
+        # 5. الكتابة على الخلفية المختارة مع ظل أسود للوضوح
+        image = Image.open(chosen_background)
+        draw = ImageDraw.Draw(image)
+        font = ImageFont.truetype(font_path, 80)
+        
+        draw.multiline_text((image.width/2 + 3, image.height/2 + 3), final_text.strip(), font=font, fill="black", anchor="mm", align="center")
+        draw.multiline_text((image.width/2, image.height/2), final_text.strip(), font=font, fill="#F5DEB3", anchor="mm", align="center")
+        image.save(output_image)
 
-            # دمج الفيديو بأعلى جودة وتأثير شاشة التلفزيون القديمة
-            ffmpeg_cmd = [
-                "ffmpeg", "-loop", "1", "-i", output_image, "-i", local_filename,
-                "-vf", "noise=alls=30:allf=t+u,eq=contrast=1.1:brightness=-0.05:saturation=0.5,drawgrid=width=iw:height=6:thickness=2:color=black@0.3",
-                "-c:v", "libx264", "-tune", "stillimage", "-c:a", "aac", "-b:a", "192k",
-                "-pix_fmt", "yuv420p", "-shortest", "-y", final_video
-            ]
-            subprocess.run(ffmpeg_cmd)
-            print(f"تم بنجاح إنشاء فيديو: {final_video}")
-
-        print("\nتم الانتهاء من معالجة جميع سور القرآن الكريم بنجاح تام!")
+        # 6. دمج الفيديو بأعلى جودة وتأثير شاشة التلفزيون القديمة
+        ffmpeg_cmd = [
+            "ffmpeg", "-loop", "1", "-i", output_image, "-i", local_filename,
+            "-vf", "noise=alls=30:allf=t+u,eq=contrast=1.1:brightness=-0.05:saturation=0.5,drawgrid=width=iw:height=6:thickness=2:color=black@0.3",
+            "-c:v", "libx264", "-tune", "stillimage", "-c:a", "aac", "-b:a", "192k",
+            "-pix_fmt", "yuv420p", "-shortest", "-y", final_video
+        ]
+        subprocess.run(ffmpeg_cmd)
+        print(f"تم بنجاح إنشاء فيديو: {final_video}")
         EOF
 
-    - name: Upload All Generated Videos
+    - name: Upload Generated Video
       uses: actions/upload-artifact@v4
       with:
-        name: All-Quran-Shorts-Videos
+        name: Selected-Surah-Video
         path: video_*.mp4
