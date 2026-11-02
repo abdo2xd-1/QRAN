@@ -1,10 +1,10 @@
 name: Generate Quran Shorts
 
 on:
-  workflow_dispatch: # يتيح لك تشغيل الكود يدوياً بزر "Run workflow"
+  workflow_dispatch: # زر للتشغيل اليدوي
   push:
     paths:
-      - '*.mp3' # يعمل تلقائياً عند رفع أي ملف صوتي جديد
+      - '*.mp3' # يشتغل أوتوماتيك لما ترفع ملف صوت
 
 jobs:
   build-videos:
@@ -19,17 +19,20 @@ jobs:
       with:
         python-version: '3.10'
 
-    - name: Install System Dependencies (FFmpeg)
+    - name: Install System Dependencies (FFmpeg & Wget)
       run: |
         sudo apt-get update
-        sudo apt-get install -y ffmpeg
+        sudo apt-get install -y ffmpeg wget
 
     - name: Install Python Dependencies
       run: |
         pip install Pillow arabic-reshaper python-bidi
 
+    - name: Download Arabic Font
+      run: wget -O Amiri-Bold.ttf https://github.com/googlefonts/amiri/raw/main/fonts/ttf/Amiri-Bold.ttf
+
     - name: Run Video Generation Script
-      run: python main.py
+      run: python pipeline.py
 
     - name: Upload Generated Videos
       uses: actions/upload-artifact@v4
