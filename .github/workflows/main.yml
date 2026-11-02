@@ -1,10 +1,10 @@
 name: Generate Quran Shorts
 
 on:
-  workflow_dispatch: # زر للتشغيل اليدوي
+  workflow_dispatch:
   push:
     paths:
-      - '*.mp3' # يشتغل أوتوماتيك لما ترفع ملف صوت
+      - '*.mp3'
 
 jobs:
   build-videos:
@@ -19,17 +19,15 @@ jobs:
       with:
         python-version: '3.10'
 
-    - name: Install System Dependencies (FFmpeg & Wget)
+    - name: Install System Dependencies (FFmpeg & Arabic Font)
       run: |
         sudo apt-get update
-        sudo apt-get install -y ffmpeg wget
+        sudo apt-get install -y ffmpeg fonts-hosny-amiri
+        cp /usr/share/fonts/opentype/hosny-amiri/Amiri-Bold.ttf ./Amiri-Bold.ttf
 
     - name: Install Python Dependencies
       run: |
         pip install Pillow arabic-reshaper python-bidi
-
-    - name: Download Arabic Font
-      run: wget -O Amiri-Bold.ttf https://github.com/googlefonts/amiri/raw/main/fonts/ttf/Amiri-Bold.ttf
 
     - name: Run Video Generation Script
       run: python pipeline.py
