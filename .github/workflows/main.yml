@@ -1,7 +1,7 @@
 name: Generate Quran Shorts
 
 on:
-  workflow_dispatch: # التشغيل هيتم بالزرار اليدوي لأننا مش هنرفع ملفات صوت تاني
+  workflow_dispatch:
 
 jobs:
   build-videos:
@@ -16,14 +16,14 @@ jobs:
       with:
         python-version: '3.10'
 
-    - name: Install System Dependencies (FFmpeg)
+    - name: Install System Dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y ffmpeg wget
 
     - name: Install Python Dependencies
       run: |
-        pip install Pillow arabic-reshaper python-bidi
+        pip install Pillow arabic-reshaper
 
     - name: Download Arabic Font
       run: wget -O Amiri-Bold.ttf https://raw.githubusercontent.com/google/fonts/main/ofl/amiri/Amiri-Bold.ttf
@@ -36,7 +36,6 @@ jobs:
         import subprocess
         import urllib.request
         import arabic_reshaper
-        from bidi.algorithm import get_display
         from PIL import Image, ImageDraw, ImageFont
 
         font_path = "Amiri-Bold.ttf" 
@@ -46,8 +45,7 @@ jobs:
             print("خطأ: تأكد من رفع صورة الخلفية base_room_empty.jpg في المستودع")
             exit(1)
 
-        # 1. قائمة السور اللي هتتحمل أوتوماتيك من موقع mp3quran للشيخ المنشاوي
-        # الأرقام تمثل رقم السورة في المصحف (001 الفاتحة، 112 الإخلاص، وهكذا)
+        # قائمة السور المراد تحميلها
         surahs = {
             "001": "سورة الفاتحة",
             "112": "سورة الإخلاص",
@@ -56,7 +54,6 @@ jobs:
         }
         base_url = "https://server10.mp3quran.net/minsh/"
 
-        print("جاري تحميل الصوتيات من الموقع...")
         for num, name in surahs.items():
             audio_url = f"{base_url}{num}.mp3"
             local_filename = f"{name}.mp3"
@@ -64,36 +61,38 @@ jobs:
                 print(f"جاري تحميل {name}...")
                 urllib.request.urlretrieve(audio_url, local_filename)
 
-        # 2. معالجة وإنشاء الفيديوهات
         audio_files = glob.glob("*.mp3")
         for audio_file in audio_files:
             surah_name = os.path.splitext(audio_file)[0]
             output_image = f"cover_{surah_name}.jpg"
             final_video = f"video_{surah_name}.mp4"
             
-            print(f"جاري دمج الفيديو: {surah_name}...")
+            # 1. إصلاح النص العربي بشكل جذري (سطر بسطر وعكسه يدوياً)
+            text_lines = ["الشيخ محمد صديق المنشاوي", surah_name]
+            final_text = ""
+            for line in text_lines:
+                reshaped = arabic_reshaper.reshape(line)
+                reversed_line = reshaped[::-1] 
+                final_text += reversed_line + "\n"
 
-            # تظبيط النص العربي
-            text_to_write = f"الشيخ محمد صديق المنشاوي\n{surah_name}"
-            reshaped_text = arabic_reshaper.reshape(text_to_write)
-            bidi_text = get_display(reshaped_text)
-
-            # الكتابة على الصورة
+            # 2. الكتابة على الصورة مع ظل أسود لتوضيح القراءة
             image = Image.open(base_image)
             draw = ImageDraw.Draw(image)
             font = ImageFont.truetype(font_path, 80)
-            draw.multiline_text((image.width/2, image.height/2), bidi_text, font=font, fill="#F5DEB3", anchor="mm", align="center")
+            
+            draw.multiline_text((image.width/2 + 3, image.height/2 + 3), final_text.strip(), font=font, fill="black", anchor="mm", align="center")
+            draw.multiline_text((image.width/2, image.height/2), final_text.strip(), font=font, fill="#F5DEB3", anchor="mm", align="center")
             image.save(output_image)
 
-            # دمج الصوت والصورة مع تأثير التلفزيون
+            # 3. تأثير التلفزيون القديم القوي (حبيبات + خطوط عرضية + ألوان باهتة)
             ffmpeg_cmd = [
                 "ffmpeg", "-loop", "1", "-i", output_image, "-i", audio_file,
-                "-vf", "noise=alls=15:allf=t+u,eq=contrast=1.1:brightness=-0.05:saturation=0.7",
+                "-vf", "noise=alls=30:allf=t+u,eq=contrast=1.1:brightness=-0.05:saturation=0.5,drawgrid=width=iw:height=6:thickness=2:color=black@0.3",
                 "-c:v", "libx264", "-tune", "stillimage", "-c:a", "aac", "-b:a", "192k",
                 "-pix_fmt", "yuv420p", "-shortest", "-y", final_video
             ]
             subprocess.run(ffmpeg_cmd)
-            print(f"تم بنجاح إنشاء فيديو: {final_video}\n")
+            print(f"تم بنجاح إنشاء فيديو: {final_video}")
         EOF
 
     - name: Upload Generated Videos
