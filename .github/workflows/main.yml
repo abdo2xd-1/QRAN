@@ -153,19 +153,17 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y ffmpeg wget
 
-    - name: Install Python Dependencies
+    - name: Install Playwright
       run: |
-        pip install google-api-python-client google-auth-oauthlib google-auth-httplib2
+        pip install playwright
+        playwright install --with-deps chromium
 
-    - name: Create, Process and Upload to YouTube
+    - name: Create, Process and Upload Video via Cookies
       env:
         GITHUB_EVENT_NAME: ${{ github.event_name }}
         SELECTED_SHEIKH: ${{ github.event.inputs.sheikh_choice }}
         SELECTED_SURAH: ${{ github.event.inputs.surah_name }}
-        # مفاتيح يوتيوب المخزنة في Secrets
-        YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
-        YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
-        YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
       run: |
         python3 - << 'EOF'
         import os
@@ -174,17 +172,13 @@ jobs:
         import json
         import random
         from datetime import datetime, timezone, timedelta
-        from google.oauth2.credentials import Credentials
-        from googleapiclient.discovery import build
-        from googleapiclient.http import MediaFileUpload
+        from playwright.sync_api import sync_playwright
 
         event_name = os.environ.get("GITHUB_EVENT_NAME", "schedule")
-        
         target_surah_id = None
         surah_name = ""
         target_name_search = ""
 
-        # 1. المنطق (يدوي / أوتوماتيكي)
         if event_name == "workflow_dispatch":
             print("=== وضع التشغيل اليدوي ===")
             sheikh_input = os.environ.get("SELECTED_SHEIKH", "المنشاوي")
@@ -197,7 +191,7 @@ jobs:
         else:
             print("=== وضع التشغيل التلقائي المجدول ===")
             utc_now = datetime.now(timezone.utc)
-            local_now = utc_now + timedelta(hours=2) # توقيت مصر
+            local_now = utc_now + timedelta(hours=2)
             current_day = local_now.strftime("%A")
             current_hour = local_now.hour
             
@@ -215,7 +209,6 @@ jobs:
             print("خطأ: الصورة base_room_empty.jpg غير موجودة!")
             exit(1)
 
-        # 2. جلب بيانات السورة
         api_url = "https://www.mp3quran.net/api/v3/suwar"
         req = urllib.request.Request(api_url, headers={'User-Agent': 'Mozilla/5.0'})
         
@@ -236,11 +229,6 @@ jobs:
             print(f"خطأ في جلب البيانات: {e}")
             exit(1)
 
-        if not target_surah_id:
-            print("لم يتم العثور على السورة.")
-            exit(1)
-
-        # 3. تحميل التلاوة
         audio_url = f"https://server10.mp3quran.net/{server_folder}/{target_surah_id}.mp3"
         local_filename = f"{surah_name}.mp3"
         print(f"جاري تحميل التلاوة لـ {surah_name}...")
@@ -248,7 +236,6 @@ jobs:
 
         final_video = f"video_{target_surah_id}.mp4"
 
-        # 4. دمج الفيديو
         ffmpeg_cmd = [
             "ffmpeg", "-loop", "1", "-i", image_filename, "-i", local_filename,
             "-vf", "noise=alls=20:allf=t+u,eq=contrast=1.1:brightness=-0.05:saturation=0.6,drawgrid=width=iw:height=6:thickness=2:color=black@0.3",
@@ -257,7 +244,6 @@ jobs:
         ]
         subprocess.run(ffmpeg_cmd)
 
-        # 5. الـ SEO
         custom_phrases = {
             "سورة الفاتحة": "أم الكتاب والشفاء التام لكل داء",
             "سورة البقرة": "سنام القرآن البركة الكبرى وطريدة الشياطين",
@@ -269,55 +255,62 @@ jobs:
         }
 
         surah_phrase = custom_phrases.get(surah_name, "تلاوة خاشعة تريح القلوب وتطمئن النفوس")
-
         video_title = f"{surah_name} كاملة بصوت {sheikh_name_ar} | {surah_phrase}"
         video_description = f"استمع بقلبك إلى تلاوة مباركة لـ {surah_name} كاملة بصوت القارئ {sheikh_name_ar}.\n{surah_phrase}.\n\nلا تنسوا دعمنا بالاشتراك في القناة والإعجاب بالفيديو لنشر القرآن الكريم.\n\n#القرآن_الكريم #{sheikh_tag} #{surah_name.replace(' ', '_')} #تلاوة_خاشعة #قرآن"
+
+        print("تم دمج الفيديو. جاري الرفع على يوتيوب باستخدام الكوكيز...")
         
-        tags = ["القرآن_الكريم", sheikh_tag, surah_name.replace(" ", "_"), "تلاوة_خاشعة", "قرآن"]
-
-        print("تم إنتاج الفيديو، جاري الرفع على يوتيوب...")
-
-        # 6. الرفع المباشر على يوتيوب
-        client_id = os.environ.get("YOUTUBE_CLIENT_ID")
-        client_secret = os.environ.get("YOUTUBE_CLIENT_SECRET")
-        refresh_token = os.environ.get("YOUTUBE_REFRESH_TOKEN")
-
-        if not all([client_id, client_secret, refresh_token]):
-            print("خطأ: مفاتيح يوتيوب غير مكتملة في الـ Secrets!")
+        cookies_raw = os.environ.get("YOUTUBE_COOKIES", "")
+        if not cookies_raw:
+            print("خطأ: لم يتم العثور على YOUTUBE_COOKIES في الـ Secrets!")
             exit(1)
 
-        creds = Credentials(
-            None,
-            refresh_token=refresh_token,
-            token_uri="https://oauth2.googleapis.com/token",
-            client_id=client_id,
-            client_secret=client_secret
-        )
+        parsed_cookies = []
+        for line in cookies_raw.splitlines():
+            if not line.strip() or line.startswith('#'): continue
+            parts = line.strip().split('\t')
+            if len(parts) == 7:
+                parsed_cookies.append({
+                    "domain": parts[0],
+                    "path": parts[2],
+                    "secure": parts[3] == "TRUE",
+                    "expires": int(parts[4]),
+                    "name": parts[5],
+                    "value": parts[6]
+                })
 
-        youtube = build("youtube", "v3", credentials=creds)
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            context = browser.new_context()
+            context.add_cookies(parsed_cookies)
+            page = context.new_page()
 
-        media = MediaFileUpload(final_video, chunksize=1024*1024, resumable=True)
-        request = youtube.videos().insert(
-            part="snippet,status",
-            body={
-                "snippet": {
-                    "categoryId": "22",
-                    "title": video_title,
-                    "description": video_description,
-                    "tags": tags
-                },
-                "status": {
-                    "privacyStatus": "public" # يتم النشر للعامة مباشرة
-                }
-            },
-            media_body=media
-        )
+            try:
+                page.goto("https://youtube.com/upload")
+                page.wait_for_timeout(8000)
+                
+                page.set_input_files("input[type='file']", final_video)
+                page.wait_for_timeout(10000)
 
-        response = None
-        while response is None:
-            status, response = request.next_chunk()
-            if status:
-                print(f"تم رفع {int(status.progress() * 100)}% ...")
-
-        print(f"تم الرفع بنجاح! رابط الفيديو: https://youtu.be/{response['id']}")
+                page.locator("#textbox").nth(0).fill(video_title)
+                page.locator("#textbox").nth(1).fill(video_description)
+                
+                page.locator("tp-yt-paper-radio-button[name='NOT_MADE_FOR_KIDS']").click()
+                page.wait_for_timeout(2000)
+                
+                for _ in range(3):
+                    page.locator("#next-button").click()
+                    page.wait_for_timeout(2000)
+                
+                page.locator("tp-yt-paper-radio-button[name='PUBLIC']").click()
+                page.wait_for_timeout(2000)
+                
+                page.locator("#done-button").click()
+                page.wait_for_timeout(15000)
+                
+                print("تم رفع الفيديو ونشره بنجاح!")
+            except Exception as e:
+                print(f"حدث خطأ أثناء محاكاة الرفع: {e}")
+            finally:
+                browser.close()
         EOF
