@@ -122,7 +122,7 @@ on:
           - سورة العصر
           - سورة الهمزة
           - سورة الفيل
-          - sورة قريش
+          - سورة قريش
           - سورة الماعون
           - سورة الكوثر
           - سورة الكافرون
@@ -150,14 +150,7 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y ffmpeg wget
 
-    - name: Install Python Dependencies
-      run: |
-        pip install Pillow arabic-reshaper python-bidi
-
-    - name: Download Arabic Font
-      run: wget -O Amiri-Bold.ttf https://raw.githubusercontent.com/google/fonts/main/ofl/amiri/Amiri-Bold.ttf
-
-    - name: Create and Run Python Script with Reversed Arabic Fix
+    - name: Create and Run Python Script (Fixed URL Format)
       env:
         SELECTED_SHEIKH: ${{ github.event.inputs.sheikh_choice }}
         SELECTED_SURAH: ${{ github.event.inputs.surah_name }}
@@ -167,31 +160,25 @@ jobs:
         import subprocess
         import urllib.request
         import json
-        import arabic_reshaper
-        from bidi.algorithm import get_display
-        from PIL import Image, ImageDraw, ImageFont
 
-        font_path = "Amiri-Bold.ttf" 
         sheikh = os.environ.get("SELECTED_SHEIKH", "المنشاوي")
         full_surah_name = os.environ.get("SELECTED_SURAH", "سورة الكهف")
         target_name = full_surah_name.replace("سورة", "").strip()
 
-        bg_image_path = "base_room_empty.jpg"
+        image_filename = "base_room_empty.jpg"
 
-        if not os.path.exists(bg_image_path):
-            print("خطأ: يرجى رفع صورة الخلفية base_room_empty.jpg في المستودع!")
+        if not os.path.exists(image_filename):
+            print("خطأ: يرجى رفع صورة الخلفية الجاهزة باسم base_room_empty.jpg في المستودع!")
             exit(1)
 
         if sheikh == "الدوسري":
             server_folder = "dsri"
             sheikh_name_ar = "الشيخ ياسر بن راشد الدوسري"
-            portrait_path = "dosri.png"
         else:
             server_folder = "minsh"
             sheikh_name_ar = "الشيخ محمد صديق المنشاوي"
-            portrait_path = "minshawi.png"
 
-        # 1. جلب رقم السورة من API موقع mp3quran
+        # 1. جلب رقم السورة وتنسيقه بثلاث خانات (001, 002, ...) لتجنب خطأ 404
         api_url = "https://www.mp3quran.net/api/v3/suwar"
         req = urllib.request.Request(api_url, headers={'User-Agent': 'Mozilla/5.0'})
         
@@ -212,49 +199,15 @@ jobs:
             print(f"لم يتم العثور على سورة '{target_name}'.")
             exit(1)
 
-        # 2. تحميل التلاوة كاملة
+        # 2. تحميل التلاوة كاملة بالرابط الصحيح
         audio_url = f"https://server10.mp3quran.net/{server_folder}/{surah_number}.mp3"
         local_filename = f"{full_surah_name}.mp3"
-        print(f"جاري تحميل التلاوة الكاملة لـ {full_surah_name}...")
+        print(f"جاري تحميل التلاوة الكاملة لـ {full_surah_name} (رابط: {audio_url})...")
         urllib.request.urlretrieve(audio_url, local_filename)
 
-        image_filename = f"image_{surah_number}.jpg"
         final_video = f"video_{surah_number}.mp4"
 
-        # 3. تصميم الصورة الثابتة مع تصحيح وعكس ترتيب الكلمات لتظهر سليمة
-        base_img = Image.open(bg_image_path).convert("RGBA")
-
-        if os.path.exists(portrait_path):
-            portrait = Image.open(portrait_path).convert("RGBA")
-            portrait = portrait.resize((500, int(portrait.height * (500 / portrait.width))))
-            base_img.paste(portrait, (40, base_img.height - portrait.height - 20), portrait)
-
-        draw = ImageDraw.Draw(base_img)
-        font_title = ImageFont.truetype(font_path, 100)
-        font_sub = ImageFont.truetype(font_path, 40)
-
-        # دالة تصحيح النص وعكس ترتيب الكلمات يدوياً لتتوازن مع بايثون
-        def fix_arabic(text):
-            # عكس ترتيب الكلمات يدوياً
-            words = text.split()
-            reversed_words = ' '.join(words[::-1])
-            reshaped = arabic_reshaper.reshape(reversed_words)
-            return get_display(reshaped)
-
-        title_text = fix_arabic(f"{full_surah_name} كاملة")
-        sheikh_text = fix_arabic(sheikh_name_ar)
-
-        # الكتابة بضبط الإحداثيات والمحاذاة
-        draw.text((1303, 153), title_text, font=font_title, fill="black", anchor="mm")
-        draw.text((1300, 150), title_text, font=font_title, fill="#FFD700", anchor="mm")
-
-        draw.text((1303, 303), sheikh_text, font=font_sub, fill="black", anchor="mm")
-        draw.text((1300, 300), sheikh_text, font=font_sub, fill="#F5DEB3", anchor="mm")
-
-        final_image = base_img.convert("RGB")
-        final_image.save(image_filename)
-
-        # 4. دمج الفيديو بالكامل مع تأثير التلفزيون القديم
+        # 3. دمج الصورة مع الصوت وتأثير التلفزيون القديم
         ffmpeg_cmd = [
             "ffmpeg", "-loop", "1", "-i", image_filename, "-i", local_filename,
             "-vf", "noise=alls=20:allf=t+u,eq=contrast=1.1:brightness=-0.05:saturation=0.6,drawgrid=width=iw:height=6:thickness=2:color=black@0.3",
@@ -263,7 +216,7 @@ jobs:
         ]
         subprocess.run(ffmpeg_cmd)
 
-        # 5. موسوعة العبارات المخصصة
+        # 4. توليد العبارات المخصصة للعنوان والوصف
         custom_phrases = {
             "سورة الفاتحة": "أم الكتاب والشفاء التام لكل داء",
             "سورة البقرة": "سنام القرآن البركة الكبرى وطريدة الشياطين",
@@ -282,7 +235,7 @@ jobs:
         with open("seo_metadata.txt", "w", encoding="utf-8") as f:
             f.write(f"=== TITLE ===\n{video_title}\n\n=== DESCRIPTION ===\n{video_description}")
 
-        print("تم إنتاج الفيديو الطويل وتصحيح الكلمات العربية بنجاح!")
+        print("تم إنتاج الفيديو الطويل بنجاح تام!")
         EOF
 
     - name: Upload Video as Artifact
