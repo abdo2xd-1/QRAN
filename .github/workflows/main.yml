@@ -88,7 +88,7 @@ on:
           - سورة الحاقة
           - سورة المعارج
           - سورة نوح
-          - sورة الجن
+          - سورة الجن
           - سورة المزمل
           - سورة المدثر
           - سورة القيامة
@@ -122,7 +122,7 @@ on:
           - سورة العصر
           - سورة الهمزة
           - سورة الفيل
-          - سورة قريش
+          - sورة قريش
           - سورة الماعون
           - سورة الكوثر
           - سورة الكافرون
@@ -157,7 +157,7 @@ jobs:
     - name: Download Arabic Font
       run: wget -O Amiri-Bold.ttf https://raw.githubusercontent.com/google/fonts/main/ofl/amiri/Amiri-Bold.ttf
 
-    - name: Create and Run Python Script with Fixed Arabic Text
+    - name: Create and Run Python Script with Reversed Arabic Fix
       env:
         SELECTED_SHEIKH: ${{ github.event.inputs.sheikh_choice }}
         SELECTED_SURAH: ${{ github.event.inputs.surah_name }}
@@ -221,7 +221,7 @@ jobs:
         image_filename = f"image_{surah_number}.jpg"
         final_video = f"video_{surah_number}.mp4"
 
-        # 3. تصميم الصورة الثابتة مع تصحيح اتجاه وطباعة النص العربي
+        # 3. تصميم الصورة الثابتة مع تصحيح وعكس ترتيب الكلمات لتظهر سليمة
         base_img = Image.open(bg_image_path).convert("RGBA")
 
         if os.path.exists(portrait_path):
@@ -233,22 +233,23 @@ jobs:
         font_title = ImageFont.truetype(font_path, 100)
         font_sub = ImageFont.truetype(font_path, 40)
 
-        # دالة لتعديل النصوص العربية وعكس الكلمات لتظهر صحيحة 100% في PIL
+        # دالة تصحيح النص وعكس ترتيب الكلمات يدوياً لتتوازن مع بايثون
         def fix_arabic(text):
-            reshaped = arabic_reshaper.reshape(text)
-            bidi_text = get_display(reshaped)
-            return bidi_text
+            # عكس ترتيب الكلمات يدوياً
+            words = text.split()
+            reversed_words = ' '.join(words[::-1])
+            reshaped = arabic_reshaper.reshape(reversed_words)
+            return get_display(reshaped)
 
         title_text = fix_arabic(f"{full_surah_name} كاملة")
         sheikh_text = fix_arabic(sheikh_name_ar)
 
-        # الكتابة في منتصف الصورة (حسب الإحداثيات المناسبة لتصميمك)
-        # استخدام anchor='mm' يضمن ضبط المحاذاة بدقة
-        draw.text((1300, 150), title_text, font=font_title, fill="black", anchor="mm") # ظل أسود
-        draw.text((1297, 147), title_text, font=font_title, fill="#FFD700", anchor="mm") # ذهبي فخم
+        # الكتابة بضبط الإحداثيات والمحاذاة
+        draw.text((1303, 153), title_text, font=font_title, fill="black", anchor="mm")
+        draw.text((1300, 150), title_text, font=font_title, fill="#FFD700", anchor="mm")
 
-        draw.text((1300, 300), sheikh_text, font=font_sub, fill="black", anchor="mm")
-        draw.text((1297, 297), sheikh_text, font=font_sub, fill="#F5DEB3", anchor="mm")
+        draw.text((1303, 303), sheikh_text, font=font_sub, fill="black", anchor="mm")
+        draw.text((1300, 300), sheikh_text, font=font_sub, fill="#F5DEB3", anchor="mm")
 
         final_image = base_img.convert("RGB")
         final_image.save(image_filename)
@@ -281,7 +282,7 @@ jobs:
         with open("seo_metadata.txt", "w", encoding="utf-8") as f:
             f.write(f"=== TITLE ===\n{video_title}\n\n=== DESCRIPTION ===\n{video_description}")
 
-        print("تم إنتاج الفيديو الطويل وتصحيح النصوص العربية بنجاح!")
+        print("تم إنتاج الفيديو الطويل وتصحيح الكلمات العربية بنجاح!")
         EOF
 
     - name: Upload Video as Artifact
