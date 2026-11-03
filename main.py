@@ -1,56 +1,252 @@
-import os
-import glob
-import subprocess
-import arabic_reshaper
-from bidi.algorithm import get_display
-from PIL import Image, ImageDraw, ImageFont
+name: Full Custom All Surahs Long Videos Pipeline
 
-# 1. إعداد مسارات الملفات الأساسية
-font_path = "Amiri-Bold.ttf" 
-base_image = "base_room_empty.jpg"
+on:
+  workflow_dispatch:
+    inputs:
+      sheikh_choice:
+        description: 'اختر الشيخ القارئ'
+        required: true
+        default: 'المنشاوي'
+        type: choice
+        options:
+          - المنشاوي
+          - الدوسري
+      surah_name:
+        description: 'اختر السورة المطلوبة'
+        required: true
+        default: 'سورة الكهف'
+        type: choice
+        options:
+          - سورة الفاتحة
+          - سورة البقرة
+          - سورة آل عمران
+          - سورة النساء
+          - سورة المائدة
+          - سورة الأنعام
+          - سورة الأعراف
+          - سورة الأنفال
+          - سورة التوبة
+          - سورة يونس
+          - سورة هود
+          - سورة يوسف
+          - سورة الرعد
+          - سورة إبراهيم
+          - سورة الحجر
+          - سورة النحل
+          - سورة الإسراء
+          - سورة الكهف
+          - سورة مريم
+          - سورة طه
+          - سورة الأنبياء
+          - سورة الحج
+          - سورة المؤمنون
+          - سورة النور
+          - سورة الفرقان
+          - سورة الشعراء
+          - سورة النمل
+          - سورة القصص
+          - سورة العنكبوت
+          - سورة الروم
+          - سورة لقمان
+          - سورة السجدة
+          - سورة الأحزاب
+          - سورة سبأ
+          - سورة فاطر
+          - سورة يس
+          - سورة الصافات
+          - سورة ص
+          - سورة الزمر
+          - سورة غافر
+          - سورة فصلت
+          - سورة الشورى
+          - سورة الزخرف
+          - سورة الدخان
+          - سورة الجاثية
+          - سورة الأحقاف
+          - سورة محمد
+          - سورة الفتح
+          - سورة الحجرات
+          - سورة ق
+          - سورة الذاريات
+          - سورة الطور
+          - سورة النجم
+          - سورة القمر
+          - سورة الرحمن
+          - سورة الواقعة
+          - سورة الحديد
+          - سورة المجادلة
+          - سورة الحشر
+          - سورة الممتحنة
+          - سورة الصف
+          - سورة الجمعة
+          - سورة المنافقون
+          - سورة التغابن
+          - سورة الطلاق
+          - سورة التحريم
+          - سورة الملك
+          - سورة القلم
+          - سورة الحاقة
+          - سورة المعارج
+          - سورة نوح
+          - سورة الجن
+          - سورة المزمل
+          - سورة المدثر
+          - سورة القيامة
+          - سورة الإنسان
+          - سورة المرسلات
+          - سورة النبأ
+          - سورة النازعات
+          - سورة عبس
+          - سورة التكوير
+          - سورة الانفطار
+          - سورة المطففين
+          - سورة الانشقاق
+          - سورة البروج
+          - سورة الطارق
+          - سورة الأعلى
+          - سورة الغاشية
+          - سورة الفجر
+          - سورة البلد
+          - سورة الشمس
+          - سورة الليل
+          - سورة الضحى
+          - سورة الشرح
+          - سورة التين
+          - سورة العلق
+          - سورة القدر
+          - sورة البينة
+          - سورة الزلزلة
+          - سورة العاديات
+          - سورة القارعة
+          - سورة التكاثر
+          - سورة العصر
+          - سورة الهمزة
+          - سورة الفيل
+          - سورة قريش
+          - سورة الماعون
+          - سورة الكوثر
+          - سورة الكافرون
+          - سورة النصر
+          - سورة المسد
+          - سورة الإخلاص
+          - سورة الفلق
+          - سورة الناس
 
-# التأكد من وجود الخط والصورة الأساسية قبل البدء
-if not os.path.exists(font_path) or not os.path.exists(base_image):
-    print("خطأ: تأكد من رفع ملف الخط Amiri-Bold.ttf والصورة الأساسية base_room_empty.jpg")
-    exit(1)
+jobs:
+  build-custom-long-video:
+    runs-on: ubuntu-latest
 
-# البحث عن جميع ملفات الصوت في المجلد
-audio_files = glob.glob("*.mp3")
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v3
 
-if not audio_files:
-    print("لم يتم العثور على ملفات صوت بصيغة mp3.")
-    exit(0)
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
 
-# 2. حلقة تكرارية لمعالجة كل ملف صوتي تلقائياً
-for audio_file in audio_files:
-    # استخراج اسم السورة من اسم الملف بدون الامتداد
-    surah_name = os.path.splitext(audio_file)[0]
-    output_image = f"cover_{surah_name}.jpg"
-    final_video = f"video_{surah_name}.mp4"
-    
-    print(f"جاري معالجة: {surah_name}...")
+    - name: Install System Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg wget
 
-    # 3. ضبط النص العربي لمنع ظهوره مقلوباً أو متقطعاً
-    text_to_write = f"الشيخ محمد صديق المنشاوي\n{surah_name}"
-    reshaped_text = arabic_reshaper.reshape(text_to_write)
-    bidi_text = get_display(reshaped_text)
+    - name: Create and Run Python Script (Direct Image & Audio Merge)
+      env:
+        SELECTED_SHEIKH: ${{ github.event.inputs.sheikh_choice }}
+        SELECTED_SURAH: ${{ github.event.inputs.surah_name }}
+      run: |
+        python3 - << 'EOF'
+        import os
+        import subprocess
+        import urllib.request
+        import json
 
-    # 4. الكتابة على الصورة
-    image = Image.open(base_image)
-    draw = ImageDraw.Draw(image)
-    font = ImageFont.truetype(font_path, 80)
-    
-    # وضع النص في منتصف الصورة تماماً
-    draw.multiline_text((image.width/2, image.height/2), bidi_text, font=font, fill="#F5DEB3", anchor="mm", align="center")
-    image.save(output_image)
+        sheikh = os.environ.get("SELECTED_SHEIKH", "المنشاوي")
+        full_surah_name = os.environ.get("SELECTED_SURAH", "سورة الكهف")
+        target_name = full_surah_name.replace("سورة", "").strip()
 
-    # 5. دمج الصوت والصورة وإضافة تأثير التلفزيون القديم باستخدام FFmpeg
-    ffmpeg_cmd = [
-        "ffmpeg", "-loop", "1", "-i", output_image, "-i", audio_file,
-        "-vf", "noise=alls=15:allf=t+u,eq=contrast=1.1:brightness=-0.05:saturation=0.7",
-        "-c:v", "libx264", "-tune", "stillimage", "-c:a", "aac", "-b:a", "192k",
-        "-pix_fmt", "yuv420p", "-shortest", "-y", final_video
-    ]
-    
-    subprocess.run(ffmpeg_cmd)
-    print(f"تم بنجاح إنشاء فيديو: {final_video}\n")
+        # اسم الصورة الجاهزة التي سترفعها بنفسك ومكتوب عليها العنوان بخط صحيح
+        image_filename = "base_room_empty.jpg"
+
+        if not os.path.exists(image_filename):
+            print("خطأ: يرجى رفع صورة الخلفية الجاهزة باسم base_room_empty.jpg في المستودع!")
+            exit(1)
+
+        if sheikh == "الدوسري":
+            server_folder = "dsri"
+            sheikh_name_ar = "الشيخ ياسر بن راشد الدوسري"
+        else:
+            server_folder = "minsh"
+            sheikh_name_ar = "الشيخ محمد صديق المنشاوي"
+
+        # 1. جلب رقم السورة من API موقع mp3quran
+        api_url = "https://www.mp3quran.net/api/v3/suwar"
+        req = urllib.request.Request(api_url, headers={'User-Agent': 'Mozilla/5.0'})
+        
+        surah_number = None
+        try:
+            with urllib.request.urlopen(req) as response:
+                data = json.loads(response.read().decode('utf-8'))
+                for s in data.get('suwar', []):
+                    if target_name in s['name']:
+                        surah_number = str(s['id']).zfill(3)
+                        full_surah_name = s['name']
+                        break
+        except Exception as e:
+            print(f"خطأ في الاتصال بقاعدة بيانات السور: {e}")
+            exit(1)
+
+        if not surah_number:
+            print(f"لم يتم العثور على سورة '{target_name}'.")
+            exit(1)
+
+        # 2. تحميل التلاوة كاملة
+        audio_url = f"https://server10.mp3quran.net/{server_folder}/{surah_number}.mp3"
+        local_filename = f"{full_surah_name}.mp3"
+        print(f"جاري تحميل التلاوة الكاملة لـ {full_surah_name}...")
+        urllib.request.urlretrieve(audio_url, local_filename)
+
+        final_video = f"video_{surah_number}.mp4"
+
+        # 3. دمج الصورة الجاهزة مع الصوت وتأثير التلفزيون القديم مباشرة
+        ffmpeg_cmd = [
+            "ffmpeg", "-loop", "1", "-i", image_filename, "-i", local_filename,
+            "-vf", "noise=alls=20:allf=t+u,eq=contrast=1.1:brightness=-0.05:saturation=0.6,drawgrid=width=iw:height=6:thickness=2:color=black@0.3",
+            "-c:v", "libx264", "-tune", "stillimage", "-c:a", "aac", "-b:a", "192k",
+            "-pix_fmt", "yuv420p", "-shortest", "-y", final_video
+        ]
+        subprocess.run(ffmpeg_cmd)
+
+        # 4. توليد العبارات المخصصة للعنوان والوصف
+        custom_phrases = {
+            "سورة الفاتحة": "أم الكتاب والشفاء التام لكل داء",
+            "سورة البقرة": "سنام القرآن البركة الكبرى وطريدة الشياطين",
+            "سورة الكهف": "راحة للقلوب ونور ما بين الجمعتين",
+            "سورة يس": "قلب القرآن لتفريج الهموم وقضاء الحوائج",
+            "سورة الملك": "المُنجية من عذاب القبر وشفيعة لصاحبها",
+            "سورة الرحمن": "عروس القرآن لبيان نعم الله التي لا تُحصى",
+            "سورة الواقعة": "جالبة الرزق والبركة ومانعة الفقر"
+        }
+
+        surah_phrase = custom_phrases.get(full_surah_name, "تلاوة خاشعة تريح القلوب وتطمئن النفوس")
+
+        video_title = f"{full_surah_name} كاملة بصوت {sheikh_name_ar} | {surah_phrase}"
+        video_description = f"استمع بقلبك إلى تلاوة مباركة لـ {full_surah_name} كاملة بصوت القارئ {sheikh_name_ar}.\n{surah_phrase}.\n\nلا تنسوا دعمنا بالاشتراك في القناة والإعجاب بالفيديو لنشر القرآن الكريم.\n\n#القرآن_الكريم #{sheikh} #{full_surah_name} #تلاوة_خاشعة #قرآن"
+        
+        with open("seo_metadata.txt", "w", encoding="utf-8") as f:
+            f.write(f"=== TITLE ===\n{video_title}\n\n=== DESCRIPTION ===\n{video_description}")
+
+        print("تم إنتاج الفيديو الطويل بنجاح تام!")
+        EOF
+
+    - name: Upload Video as Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Long-Quran-Video
+        path: video_*.mp4
+
+    - name: Upload Metadata as Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Video-SEO-Metadata
+        path: seo_metadata.txt
