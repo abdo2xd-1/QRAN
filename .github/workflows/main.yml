@@ -182,7 +182,7 @@ jobs:
         event_name = os.environ.get("GITHUB_EVENT_NAME", "schedule")
         openrouter_key = os.environ.get("OPENROUTER_API_KEY")
 
-        # 1. جلب بيانات السور
+        # 1. جلب بيانات السور برابط سليم بدون أخطاء
         api_url = "https://www.mp3quran.net/api/v3/suwar"
         req = urllib.request.Request(api_url, headers={'User-Agent': 'Mozilla/5.0'})
         suwar_list = []
@@ -252,19 +252,20 @@ jobs:
             "response_format": {"type": "json_object"}
         }
 
+        ai_plan = {}
         try:
             ai_response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload).json()
             ai_plan = json.loads(ai_response['choices'][0]['message']['content'])
-            print(f"تم استلام خطة الذكاء الاصطناعي بنجاح.")
+            print("تم استلام خطة الذكاء الاصطناعي بنجاح.")
         except Exception as e:
-            print("حدث خطأ في جلب بيانات الذكاء الاصطناعي، سيتم استخدام الافتراضي.")
+            print(f"حدث خطأ في جلب بيانات الذكاء الاصطناعي ({e})، سيتم استخدام الافتراضي.")
             ai_plan = {
-                "title": f"تلاوة خاشعة تريح القلب",
+                "title": "تلاوة خاشعة تريح القلب",
                 "description": "استمع بقلبك إلى هذه التلاوة المباركة.",
                 "tags": ["القرآن_الكريم", "تلاوة_خاشعة", "قرآن"]
             }
 
-        # 3. تجهيز روابط التحميل
+        # 3. تحديد السورة والشيخ النهائيين
         if event_name == "workflow_dispatch":
             final_sheikh = sheikh_input
             final_surah_id = target_surah_id
