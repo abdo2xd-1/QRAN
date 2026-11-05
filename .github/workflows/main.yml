@@ -47,16 +47,15 @@ jobs:
             with open("cookies.txt", "w") as f:
                 f.write(cookies_data)
 
-        # استهداف قسم الفيديوهات الطويلة
+        # استهداف قسم الفيديوهات الطويلة وسحب الفيديو منها
         target_channel = "https://www.youtube.com/@tilawat.quraniat.khalida/videos"
-        print("=== جاري البحث عن أحدث فيديو طويل في القناة المستهدفة ===")
+        print("=== جاري البحث عن أحدث فيديو في القناة المستهدفة ===")
         
         ydl_opts = {
             'extract_flat': False,
             'max_downloads': 1,
-            'format': 'bestvideo+bestaudio/best',
-            'merge_output_format': 'mp4',
-            'outtmpl': 'downloaded_video.%(ext)s',
+            'format': 'b',  # تحميل أفضل صيغة مدمجة جاهزة
+            'outtmpl': 'downloaded_video.mp4',
             'cookiefile': 'cookies.txt' if os.path.exists('cookies.txt') else None,
         }
 
@@ -79,10 +78,10 @@ jobs:
         input_file = "downloaded_video.mp4"
         output_file = "watermarked_video.mp4"
 
-        print("=== جاري وضع العلامة المائية على الفيديو بالكامل ===")
+        print("=== جاري وضع العلامة المائية على الفيديو الطويل بالكامل ===")
         watermark_text = "قناتك المباركة"
         
-        # دمج العلامة المائية مع الحفاظ على مدة الفيديو الطويلة كاملة
+        # إضافة العلامة المائية بدون أي اقتطاع للوقت
         ffmpeg_cmd = [
             "ffmpeg", "-i", input_file,
             "-vf", f"drawtext=text='{watermark_text}':x=w-tw-20:y=h-th-20:fontsize=36:fontcolor=white:box=1:boxcolor=black@0.5:boxborderw=5",
@@ -128,7 +127,7 @@ jobs:
 
         response = None
         while response is None:
-            status, response = request.next_chunk()
+            status, response = request.request.next_chunk() if hasattr(request, 'next_chunk') else request.next_chunk()
             if status:
                 print(f"تم رفع {int(status.progress() * 100)}% ...")
 
