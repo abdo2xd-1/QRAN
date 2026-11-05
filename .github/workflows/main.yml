@@ -47,8 +47,8 @@ jobs:
             with open("cookies.txt", "w") as f:
                 f.write(cookies_data)
 
-        # استهداف قسم Shorts مباشرة لضمان توافق المحتوى مع قناتك
-        target_channel = "https://www.youtube.com/@tilawat.quraniat.khalida/shorts"
+        # استهداف قسم الفيديوهات العادية لتجنب خطأ انعدام قسم Shorts
+        target_channel = "https://www.youtube.com/@tilawat.quraniat.khalida/videos"
         print("=== جاري البحث عن أحدث فيديو في القناة المستهدفة ===")
         
         ydl_opts = {
@@ -78,11 +78,13 @@ jobs:
         input_file = "downloaded_video.mp4"
         output_file = "watermarked_video.mp4"
 
-        print("=== جاري وضع العلامة المائية باستخدام FFmpeg ===")
+        print("=== جاري وضع العلامة المائية وتجهيز المقطع كـ Short ===")
         watermark_text = "قناتك المباركة"
         
+        # إضافة العلامة المائية واقتطاع المقطع إلى 59 ثانية لضمان نشره كـ Short
         ffmpeg_cmd = [
             "ffmpeg", "-i", input_file,
+            "-t", "59",
             "-vf", f"drawtext=text='{watermark_text}':x=w-tw-20:y=h-th-20:fontsize=36:fontcolor=white:box=1:boxcolor=black@0.5:boxborderw=5",
             "-codec:a", "copy", "-y", output_file
         ]
