@@ -3,7 +3,7 @@ name: Auto Repurposing & Watermark Pipeline
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 */3 * * *' # يعمل تلقائياً كل 3 ساعات
+    - cron: '0 */3 * * *'
 
 jobs:
   republish-video:
@@ -22,10 +22,11 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y ffmpeg
-        pip install yt-dlp requests google-api-python-client google-auth-oauthlib google-auth-httplib2
+        pip install yt-dlp google-api-python-client google-auth-oauthlib google-auth-httplib2
 
     - name: Run Auto-Download, Watermark & Upload Pipeline
       env:
+        YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
         YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
         YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
         YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
@@ -33,14 +34,20 @@ jobs:
         python3 - << 'EOF'
         import os
         import subprocess
-        import json
         import yt_dlp
         from google.oauth2.credentials import Credentials
         from googleapiclient.discovery import build
         from googleapiclient.http import MediaFileUpload
 
+        print("=== تجهيز ملف الكوكيز لتخطي حظر يوتيوب ===")
+        cookies_data = os.environ.get("YOUTUBE_COOKIES", "")
+        if not cookies_data:
+            print("تحذير: لم يتم العثور على YOUTUBE_COOKIES في إعدادات Secrets!")
+        else:
+            with open("cookies.txt", "w") as f:
+                f.write(cookies_data)
+
         target_channel = "https://www.youtube.com/@tilawat.quraniat.khalida/videos"
-        
         print("=== جاري البحث عن أحدث فيديو في القناة المستهدفة ===")
         
         ydl_opts = {
@@ -48,43 +55,46 @@ jobs:
             'max_downloads': 1,
             'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
             'outtmpl': 'downloaded_video.mp4',
+            'cookiefile': 'cookies.txt' if os.path.exists('cookies.txt') else None,
         }
 
+        video_title = "تلاوة قرآنية قصيرة"
+        video_desc = "تلاوة خاشعة ومباركة"
+
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # سحب بيانات أحدث فيديو
             info = ydl.extract_info(target_channel, download=False)
             if 'entries' in info and len(info['entries']) > 0:
                 latest_video = info['entries'][0]
                 video_url = latest_video.get('webpage_url')
-                video_title = latest_video.get('title', 'تلاوة خاشعة مباركة')
-                video_desc = latest_video.get('description', 'استمع إلى تلاوة عطرة.') + "\n\n#القرآن_الكريم #تلاوة"
-                print(f"تم العثور على أحدث فيديو: {video_title}")
-                
-                # تحميل الفيديو
+                video_title = latest_video.get('title', video_title)
+                video_desc = latest_video.get('description', video_desc)
+                print(f"تم العثور على الفيديو: {video_title}")
                 ydl.download([video_url])
             else:
-                print("لم يتم العثور على فيديوهات في القناة.")
+                print("لم يتم العثور على فيديوهات.")
                 exit(1)
 
         input_file = "downloaded_video.mp4"
         output_file = "watermarked_video.mp4"
 
-        print("=== جاري وضع العلامة المائية على الفيديو باستخدام FFmpeg ===")
-        # وضع نص علامة مائية في الزاوية السفلية اليمنى (يمكنك تغيير النص 'اسم قناتك' باللي تحبه)
+        print("=== جاري وضع العلامة المائية باستخدام FFmpeg ===")
         watermark_text = "قناتك المباركة"
         
         ffmpeg_cmd = [
             "ffmpeg", "-i", input_file,
-            "-vf", f"drawtext=text='{watermark_text}':x=w-tw-20:y=h-th-20:fontsize=24:fontcolor=white:box=1:boxcolor=black@0.5:boxborderw=5",
+            "-vf", f"drawtext=text='{watermark_text}':x=w-tw-20:y=h-th-20:fontsize=36:fontcolor=white:box=1:boxcolor=black@0.5:boxborderw=5",
             "-codec:a", "copy", "-y", output_file
         ]
-        
         subprocess.run(ffmpeg_cmd)
 
-        print("=== جاري الرفع على قناتك على يوتيوب ===")
+        print("=== جاري الرفع على يوتيوب ===")
         client_id = os.environ.get("YOUTUBE_CLIENT_ID")
         client_secret = os.environ.get("YOUTUBE_CLIENT_SECRET")
         refresh_token = os.environ.get("YOUTUBE_REFRESH_TOKEN")
+
+        if not all([client_id, client_secret, refresh_token]):
+            print("خطأ: مفاتيح يوتيوب غير مكتملة في Secrets!")
+            exit(1)
 
         creds = Credentials(
             None,
@@ -104,7 +114,7 @@ jobs:
                     "categoryId": "22",
                     "title": video_title,
                     "description": video_desc,
-                    "tags": ["القرآن_الكريم", "تلاوة_خاشعة"]
+                    "tags": ["القرآن_الكريم", "تلاوة_خاشعة", "shorts"]
                 },
                 "status": {
                     "privacyStatus": "public"
@@ -119,5 +129,5 @@ jobs:
             if status:
                 print(f"تم رفع {int(status.progress() * 100)}% ...")
 
-        print(f"تم بنجاح! تم نشر الفيديو وعليها علامتك المائية. الرابط: https://youtu.be/{response['id']}")
+        print(f"تم بنجاح! الرابط: https://youtu.be/{response['id']}")
         EOF
