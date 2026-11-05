@@ -1,4 +1,4 @@
-name: Auto Repurposing & Watermark Pipeline
+name: Auto Repurposing Shorts & Watermark Pipeline
 
 on:
   workflow_dispatch:
@@ -47,13 +47,14 @@ jobs:
             with open("cookies.txt", "w") as f:
                 f.write(cookies_data)
 
-        target_channel = "https://www.youtube.com/@tilawat.quraniat.khalida/videos"
+        # استهداف قسم Shorts مباشرة لضمان توافق المحتوى مع قناتك
+        target_channel = "https://www.youtube.com/@tilawat.quraniat.khalida/shorts"
         print("=== جاري البحث عن أحدث فيديو في القناة المستهدفة ===")
         
         ydl_opts = {
             'extract_flat': False,
             'max_downloads': 1,
-            'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+            'format': 'best',
             'outtmpl': 'downloaded_video.mp4',
             'cookiefile': 'cookies.txt' if os.path.exists('cookies.txt') else None,
         }
@@ -113,8 +114,8 @@ jobs:
                 "snippet": {
                     "categoryId": "22",
                     "title": video_title,
-                    "description": video_desc,
-                    "tags": ["القرآن_الكريم", "تلاوة_خاشعة", "shorts"]
+                    "description": video_desc + "\n\n#shorts #القرآن_الكريم",
+                    "tags": ["القرآن_الكريم", "تلاوة_خاشعة", "shorts", "قرآن"]
                 },
                 "status": {
                     "privacyStatus": "public"
