@@ -18,11 +18,11 @@ jobs:
       with:
         python-version: '3.10'
 
-    - name: Install System Dependencies (FFmpeg & yt-dlp)
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y ffmpeg
-        pip install yt-dlp google-api-python-client google-auth-oauthlib google-auth-httplib2
+    - name: Setup FFmpeg
+      uses: FedericoCarboni/setup-ffmpeg@v3
+
+    - name: Install Python Dependencies
+      run: pip install yt-dlp google-api-python-client google-auth-oauthlib google-auth-httplib2
 
     - name: Run Auto-Download, Watermark & Upload Pipeline
       env:
