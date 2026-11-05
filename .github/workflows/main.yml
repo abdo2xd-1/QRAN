@@ -1,4 +1,4 @@
-name: Auto Repurposing Shorts & Watermark Pipeline
+name: Auto Repurposing Long Videos & Watermark Pipeline
 
 on:
   workflow_dispatch:
@@ -47,9 +47,9 @@ jobs:
             with open("cookies.txt", "w") as f:
                 f.write(cookies_data)
 
-        # استهداف قسم الفيديوهات العادية لتجنب خطأ انعدام قسم Shorts
+        # استهداف قسم الفيديوهات الطويلة
         target_channel = "https://www.youtube.com/@tilawat.quraniat.khalida/videos"
-        print("=== جاري البحث عن أحدث فيديو في القناة المستهدفة ===")
+        print("=== جاري البحث عن أحدث فيديو طويل في القناة المستهدفة ===")
         
         ydl_opts = {
             'extract_flat': False,
@@ -59,8 +59,8 @@ jobs:
             'cookiefile': 'cookies.txt' if os.path.exists('cookies.txt') else None,
         }
 
-        video_title = "تلاوة قرآنية قصيرة"
-        video_desc = "تلاوة خاشعة ومباركة"
+        video_title = "تلاوة قرآنية مباركة"
+        video_desc = "تلاوة خاشعة تريح القلوب"
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(target_channel, download=False)
@@ -78,13 +78,12 @@ jobs:
         input_file = "downloaded_video.mp4"
         output_file = "watermarked_video.mp4"
 
-        print("=== جاري وضع العلامة المائية وتجهيز المقطع كـ Short ===")
+        print("=== جاري وضع العلامة المائية على الفيديو بالكامل ===")
         watermark_text = "قناتك المباركة"
         
-        # إضافة العلامة المائية واقتطاع المقطع إلى 59 ثانية لضمان نشره كـ Short
+        # دمج العلامة المائية مع الحفاظ على مدة الفيديو الطويلة كاملة
         ffmpeg_cmd = [
             "ffmpeg", "-i", input_file,
-            "-t", "59",
             "-vf", f"drawtext=text='{watermark_text}':x=w-tw-20:y=h-th-20:fontsize=36:fontcolor=white:box=1:boxcolor=black@0.5:boxborderw=5",
             "-codec:a", "copy", "-y", output_file
         ]
@@ -116,8 +115,8 @@ jobs:
                 "snippet": {
                     "categoryId": "22",
                     "title": video_title,
-                    "description": video_desc + "\n\n#shorts #القرآن_الكريم",
-                    "tags": ["القرآن_الكريم", "تلاوة_خاشعة", "shorts", "قرآن"]
+                    "description": video_desc + "\n\n#القرآن_الكريم #تلاوة_خاشعة",
+                    "tags": ["القرآن_الكريم", "تلاوة_خاشعة", "قرآن"]
                 },
                 "status": {
                     "privacyStatus": "public"
