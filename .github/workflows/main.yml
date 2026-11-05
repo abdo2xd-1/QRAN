@@ -16,7 +16,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.11' # تم ترقية إصدار بايثون هنا لحل المشكلة
+        python-version: '3.11'
 
     - name: Setup FFmpeg
       uses: FedericoCarboni/setup-ffmpeg@v3
@@ -47,17 +47,17 @@ jobs:
             with open("cookies.txt", "w") as f:
                 f.write(cookies_data)
 
-        # استهداف قسم الفيديوهات الطويلة
         target_channel = "https://www.youtube.com/@tilawat.quraniat.khalida/videos"
         print("=== جاري البحث عن أحدث فيديو في القناة المستهدفة ===")
         
         ydl_opts = {
             'extract_flat': False,
             'max_downloads': 1,
-            'format': 'b',  # تحميل أفضل صيغة مدمجة جاهزة
-            'outtmpl': 'downloaded_video.mp4',
+            # تعديل الصيغة لسحب الفيديو والصوت منفصلين ودمجهم عبر FFmpeg لتجنب خطأ الصيغة
+            'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best',
+            'merge_output_format': 'mp4',
+            'outtmpl': 'downloaded_video.%(ext)s',
             'cookiefile': 'cookies.txt' if os.path.exists('cookies.txt') else None,
-            # السطر السحري لتخطي حظر السيرفرات وإيهام يوتيوب أن الطلب من هاتف أندرويد
             'extractor_args': {'youtube': ['player_client=android']},
         }
 
@@ -83,7 +83,6 @@ jobs:
         print("=== جاري وضع العلامة المائية على الفيديو الطويل بالكامل ===")
         watermark_text = "قناتك المباركة"
         
-        # إضافة العلامة المائية بدون أي اقتطاع للوقت (الفيديو بالكامل)
         ffmpeg_cmd = [
             "ffmpeg", "-i", input_file,
             "-vf", f"drawtext=text='{watermark_text}':x=w-tw-20:y=h-th-20:fontsize=36:fontcolor=white:box=1:boxcolor=black@0.5:boxborderw=5",
