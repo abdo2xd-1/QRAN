@@ -54,8 +54,9 @@ jobs:
         ydl_opts = {
             'extract_flat': False,
             'max_downloads': 1,
-            'format': 'best',
-            'outtmpl': 'downloaded_video.mp4',
+            'format': 'bestvideo+bestaudio/best',
+            'merge_output_format': 'mp4',
+            'outtmpl': 'downloaded_video.%(ext)s',
             'cookiefile': 'cookies.txt' if os.path.exists('cookies.txt') else None,
         }
 
