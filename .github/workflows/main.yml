@@ -22,7 +22,8 @@ jobs:
       uses: FedericoCarboni/setup-ffmpeg@v3
 
     - name: Install Python Dependencies
-      run: pip install yt-dlp google-api-python-client google-auth-oauthlib google-auth-httplib2
+      # السطر ده بيجيب أحدث نسخة تطويرية من الأداة عشان تتخطى حماية يوتيوب الأخيرة
+      run: pip install -U https://github.com/yt-dlp/yt-dlp/archive/master.tar.gz google-api-python-client google-auth-oauthlib google-auth-httplib2
 
     - name: Run Auto-Download, Watermark & Upload Pipeline
       env:
