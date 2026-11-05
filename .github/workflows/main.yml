@@ -47,7 +47,7 @@ jobs:
             with open("cookies.txt", "w") as f:
                 f.write(cookies_data)
 
-        # استهداف قسم الفيديوهات الطويلة وسحب الفيديو منها
+        # استهداف قسم الفيديوهات الطويلة
         target_channel = "https://www.youtube.com/@tilawat.quraniat.khalida/videos"
         print("=== جاري البحث عن أحدث فيديو في القناة المستهدفة ===")
         
@@ -57,6 +57,8 @@ jobs:
             'format': 'b',  # تحميل أفضل صيغة مدمجة جاهزة
             'outtmpl': 'downloaded_video.mp4',
             'cookiefile': 'cookies.txt' if os.path.exists('cookies.txt') else None,
+            # السطر السحري لتخطي حظر السيرفرات وإيهام يوتيوب أن الطلب من هاتف أندرويد
+            'extractor_args': {'youtube': ['player_client=android']},
         }
 
         video_title = "تلاوة قرآنية مباركة"
@@ -81,7 +83,7 @@ jobs:
         print("=== جاري وضع العلامة المائية على الفيديو الطويل بالكامل ===")
         watermark_text = "قناتك المباركة"
         
-        # إضافة العلامة المائية بدون أي اقتطاع للوقت
+        # إضافة العلامة المائية بدون أي اقتطاع للوقت (الفيديو بالكامل)
         ffmpeg_cmd = [
             "ffmpeg", "-i", input_file,
             "-vf", f"drawtext=text='{watermark_text}':x=w-tw-20:y=h-th-20:fontsize=36:fontcolor=white:box=1:boxcolor=black@0.5:boxborderw=5",
@@ -127,7 +129,7 @@ jobs:
 
         response = None
         while response is None:
-            status, response = request.request.next_chunk() if hasattr(request, 'next_chunk') else request.next_chunk()
+            status, response = request.next_chunk()
             if status:
                 print(f"تم رفع {int(status.progress() * 100)}% ...")
 
