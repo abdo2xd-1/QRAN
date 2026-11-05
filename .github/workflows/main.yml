@@ -16,13 +16,12 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.10'
+        python-version: '3.11' # تم ترقية إصدار بايثون هنا لحل المشكلة
 
     - name: Setup FFmpeg
       uses: FedericoCarboni/setup-ffmpeg@v3
 
     - name: Install Python Dependencies
-      # السطر ده بيجيب أحدث نسخة تطويرية من الأداة عشان تتخطى حماية يوتيوب الأخيرة
       run: pip install -U https://github.com/yt-dlp/yt-dlp/archive/master.tar.gz google-api-python-client google-auth-oauthlib google-auth-httplib2
 
     - name: Run Auto-Download, Watermark & Upload Pipeline
